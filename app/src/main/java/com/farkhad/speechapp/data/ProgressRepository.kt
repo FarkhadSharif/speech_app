@@ -11,8 +11,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class ProgressRepository(context: Context) {
-    private val preferences = context.getSharedPreferences("speech_progress", Context.MODE_PRIVATE)
+class ProgressRepository(context: Context, uid: String) {
+    private val preferences = context.getSharedPreferences("speech_progress_$uid", Context.MODE_PRIVATE)
 
     var revision by mutableStateOf(0)
         private set

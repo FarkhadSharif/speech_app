@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -29,18 +30,23 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -53,13 +59,17 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.farkhad.speechapp.audio.SpeechAudio
 import com.farkhad.speechapp.audio.rememberSpeechAudio
+import com.farkhad.speechapp.data.FirebaseRepository
 import com.farkhad.speechapp.data.ProgressRepository
 import com.farkhad.speechapp.model.Curriculum
+import kotlinx.coroutines.launch
 import com.farkhad.speechapp.model.CurriculumLevel
 import com.farkhad.speechapp.model.GameActivity
 import com.farkhad.speechapp.ui.theme.AppBackground
@@ -78,12 +88,16 @@ private enum class AppScreen {
     ParentDashboard,
     Statistics,
     ParentGuide,
+    ChildInfo,
 }
 
 @Composable
-fun SpeechApp() {
+fun SpeechApp(
+    userId: String,
+    onSignOut: () -> Unit = {}
+) {
     val context = LocalContext.current
-    val progress = remember { ProgressRepository(context.applicationContext) }
+    val progress = remember(userId) { ProgressRepository(context.applicationContext, userId) }
     val audio = rememberSpeechAudio()
     val progressRevision = progress.revision
 
@@ -93,9 +107,27 @@ fun SpeechApp() {
     var completedThisSession by rememberSaveable { mutableStateOf(0) }
     var showBreakReminder by rememberSaveable { mutableStateOf(false) }
 
+    var showParentalGate by remember { mutableStateOf(false) }
+    var parentalGateTarget by remember { mutableStateOf<AppScreen?>(null) }
+    var correctPin by remember { mutableStateOf("1234") }
+    val repository = remember { FirebaseRepository() }
+
+    LaunchedEffect(userId) {
+        repository.getChildInfo().onSuccess { profile ->
+            if (profile != null) {
+                correctPin = profile.parentPin
+            }
+        }
+    }
+
     val screen = AppScreen.valueOf(screenName)
     fun navigate(target: AppScreen) {
         screenName = target.name
+    }
+
+    fun requestParentalGate(target: AppScreen) {
+        parentalGateTarget = target
+        showParentalGate = true
     }
 
     Surface(
@@ -103,22 +135,34 @@ fun SpeechApp() {
         color = AppBackground,
     ) {
         when (screen) {
-            AppScreen.Role -> RoleSelectionScreen(
-                onChild = { navigate(AppScreen.ChildHome) },
-                onParent = { navigate(AppScreen.ParentDashboard) },
-            )
+            AppScreen.Role -> Box(modifier = Modifier.fillMaxSize()) {
+                RoleSelectionScreen(
+                    onChild = { navigate(AppScreen.ChildHome) },
+                    onParent = { navigate(AppScreen.ParentDashboard) },
+                )
+
+                // Sign Out button placed specifically on the Role Selection screen
+                OutlinedButton(
+                    onClick = onSignOut,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp)
+                ) {
+                    Text("Шығу")
+                }
+            }
 
             AppScreen.ChildHome -> ChildHomeScreen(
                 progress = progress,
                 progressRevision = progressRevision,
                 audio = audio,
-                onBack = { navigate(AppScreen.Role) },
+                onBack = { requestParentalGate(AppScreen.Role) },
                 onOpenLevel = { levelId ->
                     selectedLevelId = levelId
                     navigate(AppScreen.Level)
                 },
                 onOpenWords = { navigate(AppScreen.WordLibrary) },
-                onOpenParent = { navigate(AppScreen.ParentDashboard) },
+                onOpenParent = { requestParentalGate(AppScreen.ParentDashboard) },
             )
 
             AppScreen.Level -> LevelHubScreen(
@@ -175,6 +219,7 @@ fun SpeechApp() {
                 onBack = { navigate(AppScreen.Role) },
                 onStatistics = { navigate(AppScreen.Statistics) },
                 onGuide = { navigate(AppScreen.ParentGuide) },
+                onChildInfo = { navigate(AppScreen.ChildInfo) }
             )
 
             AppScreen.Statistics -> StatisticsScreen(
@@ -191,7 +236,23 @@ fun SpeechApp() {
                     navigate(AppScreen.Role)
                 },
             )
+
+            AppScreen.ChildInfo -> ChildInfoScreen(
+                onBack = { navigate(AppScreen.ParentDashboard) },
+                onPinUpdated = { newPin -> correctPin = newPin }
+            )
         }
+    }
+
+    if (showParentalGate) {
+        ParentalGate(
+            correctPin = correctPin,
+            onSuccess = {
+                showParentalGate = false
+                parentalGateTarget?.let { navigate(it) }
+            },
+            onDismiss = { showParentalGate = false }
+        )
     }
 
     if (showBreakReminder) {
@@ -346,7 +407,7 @@ private fun ChildHomeScreen(
     ) {
         AppTopBar(
             title = "Менің сөйлеу жолым",
-            onBack = onBack,
+            onBack = null, // Hidden for child protection
             trailing = "👪",
             onTrailing = onOpenParent,
         )
@@ -770,6 +831,7 @@ private fun ParentDashboardScreen(
     onBack: () -> Unit,
     onStatistics: () -> Unit,
     onGuide: () -> Unit,
+    onChildInfo: () -> Unit = {},
 ) {
     @Suppress("UNUSED_VARIABLE") val observeRevision = progressRevision
     val tips = listOf(
@@ -841,6 +903,17 @@ private fun ParentDashboardScreen(
                 ) {
                     Text("📘 Нұсқаулық")
                 }
+            }
+
+            Button(
+                onClick = onChildInfo,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AppOrange),
+            ) {
+                Text("🧒 Бала туралы ақпарат")
             }
 
             Text(
@@ -1185,7 +1258,7 @@ private fun InfoStrip(emoji: String, text: String, color: Color) {
 @Composable
 private fun AppTopBar(
     title: String,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)? = null,
     trailing: String? = null,
     onTrailing: () -> Unit = {},
 ) {
@@ -1196,7 +1269,11 @@ private fun AppTopBar(
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        BackButton(onClick = onBack)
+        if (onBack != null) {
+            BackButton(onClick = onBack)
+        } else {
+            Spacer(modifier = Modifier.size(42.dp))
+        }
         Text(
             text = title,
             modifier = Modifier
@@ -1255,4 +1332,202 @@ private fun levelGradient(levelId: Int): List<Color> = when (levelId) {
     4 -> listOf(Color(0xFFE7D8FF), Color(0xFFF6F0FF))
     5 -> listOf(Color(0xFFFFD8E8), Color(0xFFFFF0F6))
     else -> listOf(Color(0xFFFFE9A8), Color(0xFFFFF9DA))
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChildInfoScreen(
+    onBack: () -> Unit,
+    onPinUpdated: (String) -> Unit
+) {
+    val repository = remember { FirebaseRepository() }
+    val scope = rememberCoroutineScope()
+    var name by remember { mutableStateOf("") }
+    var age by remember { mutableStateOf("") }
+    var pin by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(true) }
+    var isSaving by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        repository.getChildInfo().onSuccess { profile ->
+            if (profile != null) {
+                name = profile.name
+                age = profile.age
+                pin = profile.parentPin
+            }
+            isLoading = false
+        }.onFailure {
+            isLoading = false
+            message = "Деректерді жүктеу қатесі"
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(AppBackground)
+            .statusBarsPadding(),
+    ) {
+        AppTopBar(title = "Бала туралы ақпарат", onBack = onBack)
+
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = AppBlue)
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    "Мұнда баланың есімі мен жасын өзгерте аласыз. Бұл мәліметтер оқу барысын жекелендіруге көмектеседі.",
+                    color = AppText.copy(alpha = 0.6f),
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 20.sp
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Баланың есімі") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = age,
+                    onValueChange = { age = it },
+                    label = { Text("Баланың жасы") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = pin,
+                    onValueChange = { if (it.length <= 4 && it.all { char -> char.isDigit() }) pin = it },
+                    label = { Text("Ата-ана PIN-коды (4 сан)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+
+                message?.let {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(it, color = if (it.contains("қате")) Color.Red else AppGreen, fontSize = 13.sp)
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                Button(
+                    onClick = {
+                        scope.launch {
+                            isSaving = true
+                            message = null
+                            repository.updateChildInfo(name, age, pin)
+                                .onSuccess {
+                                    message = "Мәліметтер сақталды"
+                                    isSaving = false
+                                    onPinUpdated(pin)
+                                }
+                                .onFailure {
+                                    message = "Сақтау қатесі"
+                                    isSaving = false
+                                }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    enabled = !isSaving,
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = AppBlue)
+                ) {
+                    if (isSaving) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                    } else {
+                        Text("Сақтау", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ParentalGate(
+    correctPin: String,
+    onSuccess: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var input by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Ата-ана бақылауы", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    "Ата-ана бөліміне өту үшін 4 таңбалы PIN-кодты енгізіңіз.",
+                    textAlign = TextAlign.Center,
+                    fontSize = 14.sp
+                )
+                Spacer(modifier = Modifier.height(20.dp))
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { if (it.length <= 4 && it.all { char -> char.isDigit() }) input = it },
+                    label = { Text("PIN-код") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.width(150.dp),
+                    isError = error
+                )
+                if (error) {
+                    Text(
+                        "PIN-код қате, қайта көріңіз",
+                        color = Color.Red,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (input == correctPin) {
+                        onSuccess()
+                    } else {
+                        error = true
+                        input = ""
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = AppBlue)
+            ) {
+                Text("Растау")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Бас тарту")
+            }
+        },
+        shape = RoundedCornerShape(24.dp)
+    )
 }

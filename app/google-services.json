@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "360436128676",
+    "project_id": "soyle-app",
+    "storage_bucket": "soyle-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:360436128676:android:53f703cfa56cf476607f31",
+        "android_client_info": {
+          "package_name": "com.farkhad.speechapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD0hwOz3KfV9M6lxfZ0VfFmBt_3tfk2oxY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
