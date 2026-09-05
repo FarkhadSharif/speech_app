@@ -19,7 +19,7 @@ The course contains 6 sequential levels, 18 activities, and 80 rounds. A new lev
 
 ## Child experience
 
-- Spoken Kazakh prompts through Android Text-to-Speech, with a replay button on every round
+- Bundled native Kazakh speech for every course phrase, with offline playback and a replay button on every round
 - Five exercise formats: listen-and-choose, syllable tapping, word ordering, story ordering, and voice practice
 - Optional Kazakh speech recognition with an adult-confirmation fallback; microphone access is not required
 - Supportive feedback that shows the correct model without punishing mistakes
@@ -29,6 +29,8 @@ The course contains 6 sequential levels, 18 activities, and 80 rounds. A new lev
 
 ## Parent experience
 
+- Persistent parent accounts through Firebase Authentication with session restoration
+- Email verification, safe password recovery, current-device sign-out, and all-device session revocation
 - Real local progress dashboard and per-activity statistics
 - Practical prompts for responsive back-and-forth talk, expanding the child's words, shared reading, and sound play
 - Guidance for multilingual families and signs that merit professional or hearing assessment
@@ -36,7 +38,7 @@ The course contains 6 sequential levels, 18 activities, and 80 rounds. A new lev
 
 ## Privacy
 
-Progress is stored only in Android `SharedPreferences` on the device, and Android backup is disabled. The app has no account, ads, analytics, backend, or `INTERNET` permission. Audio is never saved by the app. If voice recognition is used, processing depends on the speech service installed on the device and that service may use a network connection. The parent-assisted option works without the microphone.
+Parent accounts are managed by Firebase Authentication. The child name, age, and learned-word identifiers can be stored in Cloud Firestore for the signed-in parent; detailed activity progress currently remains in Android `SharedPreferences` on that device. Android backup is disabled. The app has no ads or analytics, and microphone audio is never saved by the app. If voice recognition is used, processing depends on the speech service installed on the device and that service may use a network connection. The parent-assisted option works without the microphone.
 
 ## Open and run
 
@@ -47,7 +49,13 @@ Progress is stored only in Android `SharedPreferences` on the device, and Androi
 5. Select the device and click **Run app**.
 6. Grant microphone access only if you want automatic voice matching.
 
-The app requires Android 7.0 (API 24) or newer. A Kazakh TTS voice installed in Android gives the best listening experience; the app falls back to the device language if it is unavailable.
+The app requires Android 7.0 (API 24) or newer. All current course prompts are bundled in the APK and work without internet access or an installed Android text-to-speech voice.
+
+Firebase Authentication features require an internet connection. In the Firebase console, enable the **Email/Password** sign-in provider and configure the verification and password-reset email templates for the production domain.
+
+## Bundled Kazakh speech
+
+The 122 normalized course phrases are generated with the high-quality `kk_KZ-issai-high` Piper voice trained on the ISSAI KazakhTTS/KazakhTTS2 datasets. The bundled voice uses speaker `ISSAI_KazakhTTS_F1_Raya`. Dataset attribution and the CC BY 4.0 license link are included in `app/src/main/assets/speech/ATTRIBUTION.txt`.
 
 ## Build and verify
 
@@ -60,11 +68,20 @@ Use Java 17 and Android SDK 34:
 
 The APK is generated at `app/build/outputs/apk/debug/app-debug.apk`.
 
+## Firebase backend
+
+The callable Cloud Function for **sign out on all devices** is prepared in `backend/functions`. It accepts only authenticated callable requests, obtains the parent identifier from the verified Firebase Authentication context, and never accepts a user identifier from Android. The Android app clears its local session only after the function succeeds.
+
+The function has not been deployed. Before this feature can work in an installed APK, select the same Firebase project used by `app/google-services.json`, then follow `backend/functions/README.md`. Do not add a project-specific `.firebaserc` until the deployment target has been confirmed.
+
 ## Architecture
 
 - `model/Curriculum.kt` — all levels, activities, rounds, and voice-match scoring
 - `data/ProgressRepository.kt` — persistent progress, stars, attempts, active days, and unlock logic
-- `audio/SpeechAudio.kt` — Text-to-Speech and short feedback sounds
+- `data/AuthRepository.kt` — testable parent-authentication contract and domain errors
+- `ui/AuthViewModel.kt` — unified authentication state, validation, and session restoration
+- `backend/functions` — tested Admin SDK callable function for revoking the current parent's refresh tokens
+- `audio/SpeechAudio.kt` — bundled offline speech playback, device TTS fallback, and short feedback sounds
 - `ui/GameScreens.kt` — reusable exercise engine and the five exercise types
 - `ui/SpeechApp.kt` — child path, parent area, navigation, statistics, guide, and word library
 

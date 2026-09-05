@@ -94,7 +94,8 @@ private enum class AppScreen {
 @Composable
 fun SpeechApp(
     userId: String,
-    onSignOut: () -> Unit = {}
+    onSignOut: () -> Unit = {},
+    onSignOutEverywhere: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val progress = remember(userId) { ProgressRepository(context.applicationContext, userId) }
@@ -143,7 +144,8 @@ fun SpeechApp(
             AppScreen.Role -> RoleSelectionScreen(
                 onChild = { navigate(AppScreen.ChildHome) },
                 onParent = { navigate(AppScreen.ParentDashboard) },
-                onSignOut = onSignOut
+                onSignOut = onSignOut,
+                onSignOutEverywhere = onSignOutEverywhere,
             )
 
             AppScreen.ChildHome -> ChildHomeScreen(
@@ -237,7 +239,6 @@ fun SpeechApp(
 
             AppScreen.ChildInfo -> ChildInfoScreen(
                 onBack = { navigate(AppScreen.ParentDashboard) },
-                onPinUpdated = { newPin -> correctPin = newPin }
             )
         }
     }
@@ -297,7 +298,8 @@ fun SpeechApp(
 private fun RoleSelectionScreen(
     onChild: () -> Unit,
     onParent: () -> Unit,
-    onSignOut: () -> Unit
+    onSignOut: () -> Unit,
+    onSignOutEverywhere: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         NetworkImageBackground(
@@ -306,16 +308,30 @@ private fun RoleSelectionScreen(
         )
         KazakhPatternBackground(color = Color.White.copy(alpha = 0.15f))
         
-        OutlinedButton(
-            onClick = onSignOut,
+        Column(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .statusBarsPadding()
                 .padding(16.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f))
         ) {
-            Text("Шығу")
+            OutlinedButton(
+                onClick = onSignOut,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f)),
+            ) {
+                Text("Шығу / Выйти")
+            }
+            TextButton(
+                onClick = onSignOutEverywhere,
+                modifier = Modifier.align(Alignment.End),
+                colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
+            ) {
+                Text(
+                    text = "Барлық құрылғылардан\nНа всех устройствах",
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.End,
+                )
+            }
         }
 
         Column(
@@ -1452,7 +1468,7 @@ private fun ParentGuideScreen(
             GuideSection(
                 emoji = "🔐",
                 title = "Құпиялық",
-                text = "Нәтижелер тек осы құрылғыдағы SharedPreferences ішінде сақталады. Дауыс жаттығуында қолданба аудионы сақтамайды; тану Android жүйесінің сөйлеу қызметіне байланысты және кей құрылғыда желіні қолдануы мүмкін. Микрофон міндетті емес.",
+                text = "Ата-ана аккаунты Firebase Authentication арқылы басқарылады. Бала туралы негізгі ақпарат пен үйренген сөздер Firebase ішінде, ал толық жаттығу нәтижелері осы құрылғыда сақталады. Қолданба дауыс жазбасын сақтамайды; сөйлеуді тану Android қызметіне байланысты және желіні қолдануы мүмкін.",
             )
             GuideSection(
                 emoji = "🩺",
@@ -1706,13 +1722,11 @@ private fun levelGradient(levelId: Int): List<Color> = when (levelId) {
 @Composable
 private fun ChildInfoScreen(
     onBack: () -> Unit,
-    onPinUpdated: (String) -> Unit
 ) {
     val repository = remember { FirebaseRepository() }
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
     var age by remember { mutableStateOf("") }
-    var pin by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(true) }
     var isSaving by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -1722,7 +1736,6 @@ private fun ChildInfoScreen(
             if (profile != null) {
                 name = profile.name
                 age = profile.age
-                pin = profile.parentPin
             }
             isLoading = false
         }.onFailure {
@@ -1752,7 +1765,7 @@ private fun ChildInfoScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    "Мұнда баланың есімі мен жасын өзгерте аласыз. Бұл мәліметтер оқу барысын жекелендіруге көмектеседі.",
+                    "Мұнда баланың есімі мен жасын өзгерте аласыз. Ата-ана PIN-коды бұл нұсқада бұлтқа сақталмайды.",
                     color = AppText.copy(alpha = 0.6f),
                     fontSize = 14.sp,
                     textAlign = TextAlign.Center,
@@ -1781,18 +1794,6 @@ private fun ChildInfoScreen(
                     shape = RoundedCornerShape(12.dp)
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                OutlinedTextField(
-                    value = pin,
-                    onValueChange = { if (it.length <= 4 && it.all { char -> char.isDigit() }) pin = it },
-                    label = { Text("Ата-ана PIN-коды (4 сан)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-
                 message?.let {
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(it, color = if (it.contains("қате")) Color.Red else AppGreen, fontSize = 13.sp)
@@ -1805,11 +1806,10 @@ private fun ChildInfoScreen(
                         scope.launch {
                             isSaving = true
                             message = null
-                            repository.updateChildInfo(name, age, pin)
+                            repository.updateChildInfo(name, age)
                                 .onSuccess {
                                     message = "Мәліметтер сақталды"
                                     isSaving = false
-                                    onPinUpdated(pin)
                                 }
                                 .onFailure {
                                     message = "Сақтау қатесі"

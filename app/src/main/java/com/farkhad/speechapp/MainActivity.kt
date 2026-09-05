@@ -4,8 +4,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.farkhad.speechapp.ui.AuthLoadingScreen
 import com.farkhad.speechapp.ui.AuthScreen
+import com.farkhad.speechapp.ui.AuthUiState
 import com.farkhad.speechapp.ui.AuthViewModel
+import com.farkhad.speechapp.ui.EmailVerificationScreen
+import com.farkhad.speechapp.ui.SignOutEverywhereDialog
 import com.farkhad.speechapp.ui.SpeechApp
 
 class MainActivity : ComponentActivity() {
@@ -15,18 +19,23 @@ class MainActivity : ComponentActivity() {
         setContent {
             val authViewModel: AuthViewModel = viewModel()
 
-            if (!authViewModel.isAuthenticated) {
-                AuthScreen(
+            when (val authState = authViewModel.authState) {
+                AuthUiState.Loading -> AuthLoadingScreen()
+                AuthUiState.Unauthenticated,
+                is AuthUiState.Error -> AuthScreen(authViewModel)
+                is AuthUiState.VerificationRequired -> EmailVerificationScreen(
                     viewModel = authViewModel,
-                    onAuthSuccess = { authViewModel.isAuthenticated = true }
+                    user = authState.user,
                 )
-            } else {
-                SpeechApp(
-                    userId = authViewModel.currentUserUid ?: "anonymous",
-                    onSignOut = {
-                        authViewModel.signOut()
-                    }
+                is AuthUiState.Authenticated -> SpeechApp(
+                    userId = authState.user.id,
+                    onSignOut = authViewModel::signOut,
+                    onSignOutEverywhere = authViewModel::openSignOutEverywhereDialog,
                 )
+            }
+
+            if (authViewModel.isSignOutEverywhereDialogVisible) {
+                SignOutEverywhereDialog(authViewModel)
             }
         }
     }

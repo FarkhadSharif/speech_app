@@ -1,0 +1,13 @@
+Bundled Kazakh speech audio
+
+Voice model: kk_KZ-issai-high, speaker ISSAI_KazakhTTS_F1_Raya
+Model source: https://huggingface.co/rhasspy/piper-voices/tree/main/kk/kk_KZ/issai/high
+Training datasets: ISSAI KazakhTTS and KazakhTTS2
+Dataset source: https://github.com/IS2AI/Kazakh_TTS
+Dataset authors: Institute of Smart Systems and Artificial Intelligence (ISSAI),
+Nazarbayev University
+Dataset license: Creative Commons Attribution 4.0 International
+License: https://creativecommons.org/licenses/by/4.0/
+
+The application phrases were selected and corrected for the Söyle course, synthesized
+with Piper, and converted to mono MP3 files for offline Android playback.
