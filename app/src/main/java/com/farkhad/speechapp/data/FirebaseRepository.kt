@@ -46,11 +46,15 @@ class FirebaseRepository {
             )
             db.collection("users").document(uid).set(userProfile).await()
 
-            // 2. Initialize level 1 progress
+            // 2. Initialize level 1 progress and learned words
             val initialProgress = UserProgress("level_1", 1, false, 0)
             db.collection("users").document(uid)
                 .collection("levels").document("level_1")
                 .set(initialProgress).await()
+            
+            db.collection("users").document(uid)
+                .collection("metadata").document("learned_words")
+                .set(mapOf("ids" to emptyList<String>())).await()
 
             Result.success(uid)
         } catch (e: FirebaseAuthUserCollisionException) {
@@ -130,5 +134,37 @@ class FirebaseRepository {
     // Sign out the current user
     fun signOut() {
         auth.signOut()
+    }
+
+    // Learned Words management
+    suspend fun saveLearnedWord(wordId: String): Result<Boolean> {
+        return try {
+            val uid = auth.currentUser?.uid ?: throw Exception("No user logged in")
+            val docRef = db.collection("users").document(uid)
+                .collection("metadata").document("learned_words")
+            
+            val doc = docRef.get().await()
+            val currentIds = doc.get("ids") as? List<String> ?: emptyList()
+            if (!currentIds.contains(wordId)) {
+                val newIds = currentIds + wordId
+                docRef.set(mapOf("ids" to newIds), SetOptions.merge()).await()
+            }
+            Result.success(true)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getLearnedWords(): Result<Set<String>> {
+        return try {
+            val uid = auth.currentUser?.uid ?: throw Exception("No user logged in")
+            val doc = db.collection("users").document(uid)
+                .collection("metadata").document("learned_words")
+                .get().await()
+            val ids = doc.get("ids") as? List<String> ?: emptyList()
+            Result.success(ids.toSet())
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 }

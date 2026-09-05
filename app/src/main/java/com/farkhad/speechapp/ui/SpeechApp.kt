@@ -8,6 +8,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -55,8 +56,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -69,15 +73,11 @@ import com.farkhad.speechapp.audio.rememberSpeechAudio
 import com.farkhad.speechapp.data.FirebaseRepository
 import com.farkhad.speechapp.data.ProgressRepository
 import com.farkhad.speechapp.model.Curriculum
-import kotlinx.coroutines.launch
 import com.farkhad.speechapp.model.CurriculumLevel
 import com.farkhad.speechapp.model.GameActivity
-import com.farkhad.speechapp.ui.theme.AppBackground
-import com.farkhad.speechapp.ui.theme.AppBlue
-import com.farkhad.speechapp.ui.theme.AppGreen
-import com.farkhad.speechapp.ui.theme.AppOrange
-import com.farkhad.speechapp.ui.theme.AppPurple
-import com.farkhad.speechapp.ui.theme.AppText
+import com.farkhad.speechapp.model.VocabularyWord
+import com.farkhad.speechapp.ui.theme.*
+import kotlinx.coroutines.launch
 
 private enum class AppScreen {
     Role,
@@ -100,6 +100,7 @@ fun SpeechApp(
     val progress = remember(userId) { ProgressRepository(context.applicationContext, userId) }
     val audio = rememberSpeechAudio()
     val progressRevision = progress.revision
+    val scope = rememberCoroutineScope()
 
     var screenName by rememberSaveable { mutableStateOf(AppScreen.Role.name) }
     var selectedLevelId by rememberSaveable { mutableStateOf(1) }
@@ -118,6 +119,10 @@ fun SpeechApp(
                 correctPin = profile.parentPin
             }
         }
+        // Sync learned words from Firebase
+        repository.getLearnedWords().onSuccess { wordIds ->
+            progress.updateLearnedWords(wordIds)
+        }
     }
 
     val screen = AppScreen.valueOf(screenName)
@@ -135,34 +140,22 @@ fun SpeechApp(
         color = AppBackground,
     ) {
         when (screen) {
-            AppScreen.Role -> Box(modifier = Modifier.fillMaxSize()) {
-                RoleSelectionScreen(
-                    onChild = { navigate(AppScreen.ChildHome) },
-                    onParent = { navigate(AppScreen.ParentDashboard) },
-                )
-
-                // Sign Out button placed specifically on the Role Selection screen
-                OutlinedButton(
-                    onClick = onSignOut,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(16.dp)
-                ) {
-                    Text("Шығу")
-                }
-            }
+            AppScreen.Role -> RoleSelectionScreen(
+                onChild = { navigate(AppScreen.ChildHome) },
+                onParent = { navigate(AppScreen.ParentDashboard) },
+                onSignOut = onSignOut
+            )
 
             AppScreen.ChildHome -> ChildHomeScreen(
                 progress = progress,
                 progressRevision = progressRevision,
                 audio = audio,
-                onBack = { requestParentalGate(AppScreen.Role) },
                 onOpenLevel = { levelId ->
                     selectedLevelId = levelId
                     navigate(AppScreen.Level)
                 },
                 onOpenWords = { navigate(AppScreen.WordLibrary) },
-                onOpenParent = { requestParentalGate(AppScreen.ParentDashboard) },
+                onBack = { requestParentalGate(AppScreen.Role) }
             )
 
             AppScreen.Level -> LevelHubScreen(
@@ -170,6 +163,8 @@ fun SpeechApp(
                 progress = progress,
                 progressRevision = progressRevision,
                 audio = audio,
+                repository = repository,
+                scope = scope,
                 onBack = { navigate(AppScreen.ChildHome) },
                 onOpenActivity = { activity ->
                     selectedActivityId = activity.id
@@ -185,7 +180,9 @@ fun SpeechApp(
                 )
                 GameSessionScreen(
                     activity = activity,
+                    progress = progress,
                     audio = audio,
+                    repository = repository,
                     onBack = {
                         selectedLevelId = Curriculum.levelForActivity(activity.id).id
                         navigate(AppScreen.Level)
@@ -209,6 +206,7 @@ fun SpeechApp(
             }
 
             AppScreen.WordLibrary -> WordLibraryScreen(
+                progress = progress,
                 audio = audio,
                 onBack = { navigate(AppScreen.ChildHome) },
             )
@@ -299,64 +297,81 @@ fun SpeechApp(
 private fun RoleSelectionScreen(
     onChild: () -> Unit,
     onParent: () -> Unit,
+    onSignOut: () -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFFF2FBFF), Color(0xFFFFFBF0)),
-                ),
-            )
-            .statusBarsPadding()
-            .padding(horizontal = 30.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Spacer(modifier = Modifier.fillMaxHeight(0.11f))
-        Box(
+    Box(modifier = Modifier.fillMaxSize()) {
+        NetworkImageBackground(
+            url = "https://images.unsplash.com/photo-1542332213-9b5a5a3fad35?auto=format&fit=crop&q=80&w=1000",
+            overlayColor = Color.Black.copy(alpha = 0.3f)
+        )
+        KazakhPatternBackground(color = Color.White.copy(alpha = 0.15f))
+        
+        OutlinedButton(
+            onClick = onSignOut,
             modifier = Modifier
-                .size(104.dp)
-                .clip(CircleShape)
-                .background(Brush.linearGradient(listOf(AppBlue, Color(0xFF65C7FF)))),
-            contentAlignment = Alignment.Center,
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(16.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f))
         ) {
-            Text("🗣️", fontSize = 54.sp)
+            Text("Шығу")
         }
-        Spacer(modifier = Modifier.height(18.dp))
-        Text(
-            text = "Сөйле",
-            color = AppBlue,
-            style = MaterialTheme.typography.headlineLarge,
-        )
-        Text(
-            text = "Тыңда • ойна • сөйле • әңгімеле",
-            modifier = Modifier.padding(top = 8.dp),
-            color = AppText.copy(alpha = 0.62f),
-            fontSize = 15.sp,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(modifier = Modifier.height(38.dp))
-        RoleButton(
-            text = "🧒  Балаға арналған жол",
-            subtitle = "6 деңгей • 18 ойын",
-            color = AppOrange,
-            onClick = onChild,
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        RoleButton(
-            text = "👪  Ата-ана бөлімі",
-            subtitle = "Нәтиже, кеңес және қауіпсіздік",
-            color = AppGreen,
-            onClick = onParent,
-        )
-        Spacer(modifier = Modifier.height(28.dp))
-        Text(
-            text = "Қысқа, көңілді сабақтар. Жарнама жоқ. Дерек серверге жіберілмейді.",
-            color = AppText.copy(alpha = 0.48f),
-            fontSize = 12.sp,
-            lineHeight = 18.sp,
-            textAlign = TextAlign.Center,
-        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(horizontal = 30.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Spacer(modifier = Modifier.fillMaxHeight(0.11f))
+            Box(
+                modifier = Modifier
+                    .size(104.dp)
+                    .clip(CircleShape)
+                    .background(Brush.linearGradient(listOf(AppBlue, Color(0xFF65C7FF)))),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("🗣️", fontSize = 54.sp)
+            }
+            Spacer(modifier = Modifier.height(18.dp))
+            Text(
+                text = "Сөйле",
+                color = Color.White,
+                style = MaterialTheme.typography.headlineLarge,
+            )
+            Text(
+                text = "Тыңда • ойна • сөйле • әңгімеле",
+                modifier = Modifier.padding(top = 8.dp),
+                color = Color.White.copy(alpha = 0.8f),
+                fontSize = 15.sp,
+                textAlign = TextAlign.Center,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(38.dp))
+            RoleButton(
+                text = "🧒  Балалар Әлемі",
+                subtitle = "Ойын арқылы үйрену",
+                color = AppOrange,
+                onClick = onChild,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            RoleButton(
+                text = "👪  Ата-ана бұрышы",
+                subtitle = "Даму статистикасы",
+                color = AppGreen,
+                onClick = onParent,
+            )
+            Spacer(modifier = Modifier.height(28.dp))
+            Text(
+                text = "Қазақша білім беру қосымшасы",
+                color = Color.White.copy(alpha = 0.6f),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
@@ -375,7 +390,7 @@ private fun RoleButton(
         shape = RoundedCornerShape(20.dp),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 5.dp),
         colors = ButtonDefaults.buttonColors(containerColor = color),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp),
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(text, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
@@ -389,202 +404,247 @@ private fun ChildHomeScreen(
     progress: ProgressRepository,
     progressRevision: Int,
     audio: SpeechAudio,
-    onBack: () -> Unit,
     onOpenLevel: (Int) -> Unit,
     onOpenWords: () -> Unit,
-    onOpenParent: () -> Unit,
+    onBack: () -> Unit,
 ) {
     @Suppress("UNUSED_VARIABLE") val observeRevision = progressRevision
-    val currentLevel = Curriculum.levels.firstOrNull { level ->
-        progress.isLevelUnlocked(level.id) && progress.levelProgress(level) < 1f
-    } ?: Curriculum.levels.last()
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(AppBackground)
-            .statusBarsPadding(),
-    ) {
-        AppTopBar(
-            title = "Менің сөйлеу жолым",
-            onBack = null, // Hidden for child protection
-            trailing = "👪",
-            onTrailing = onOpenParent,
+    
+    Box(modifier = Modifier.fillMaxSize().background(AppBackground)) {
+        NetworkImageBackground(
+            url = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&q=80&w=1000",
+            alpha = 0.15f
         )
+        KazakhPatternBackground(color = AppBlue.copy(alpha = 0.05f))
+        
         Column(
             modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp, vertical = 10.dp),
+                .fillMaxSize()
+                .statusBarsPadding(),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StatPill("⭐", "${progress.totalStars}", "жұлдыз", Modifier.weight(1f))
-                StatPill("🏆", "${progress.completedCount}/18", "ойын", Modifier.weight(1f))
-                StatPill("🌱", "${progress.activeDays}", "күн", Modifier.weight(1f))
-            }
-
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 14.dp),
-                color = Color(0xFFEAF8FF),
-                shape = RoundedCornerShape(20.dp),
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(currentLevel.emoji, fontSize = 32.sp)
-                        Column(modifier = Modifier.padding(start = 12.dp)) {
-                            Text("Бүгінгі ұсыныс", color = AppBlue, fontWeight = FontWeight.ExtraBold)
-                            Text(currentLevel.title, color = AppText, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                    Text(
-                        text = "Бір ойыннан баста. Тыңдап болған соң экраннан тыс жерде жаңа сөзді тағы бір рет қолдан.",
-                        modifier = Modifier.padding(top = 10.dp),
-                        color = AppText.copy(alpha = 0.68f),
-                        fontSize = 13.sp,
-                        lineHeight = 19.sp,
-                    )
-                    Button(
-                        onClick = { onOpenLevel(currentLevel.id) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = AppBlue),
-                        shape = RoundedCornerShape(14.dp),
-                    ) {
-                        Text("Жалғастыру →", fontWeight = FontWeight.Bold)
+            AppTopBar(
+                title = "Сөйлеу Саяхаты",
+                onBack = null,
+                trailing = "🏠",
+                onTrailing = onBack,
+            )
+            
+            Box(modifier = Modifier.weight(1f)) {
+                LevelRouteMap(
+                    levels = Curriculum.levels,
+                    progress = progress,
+                    onOpenLevel = onOpenLevel
+                )
+                
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 24.dp)
+                        .padding(horizontal = 24.dp)
+                        .fillMaxWidth()
+                        .height(64.dp)
+                        .clip(RoundedCornerShape(32.dp))
+                        .clickable(onClick = onOpenWords),
+                    color = AppGreen,
+                    shadowElevation = 8.dp
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text("🔊 Сөздер Кітапханасы", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
                     }
                 }
             }
-
-            if (!audio.supportsKazakh && audio.ready) {
-                InfoStrip(
-                    emoji = "🔊",
-                    text = "Құрылғыда қазақша дауыс табылмады. Android баптауларынан қазақша TTS дауысын орнатуға болады.",
-                    color = Color(0xFFFFF0D7),
-                )
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 18.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Деңгейлер", color = AppText, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
-                Text("қиындық ↑", color = AppPurple, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            }
-
-            Curriculum.levels.forEach { level ->
-                val unlocked = progress.isLevelUnlocked(level.id)
-                LevelCard(
-                    level = level,
-                    unlocked = unlocked,
-                    progress = progress.levelProgress(level),
-                    stars = progress.levelStars(level),
-                    onClick = { if (unlocked) onOpenLevel(level.id) },
-                )
-            }
-
-            OutlinedButton(
-                onClick = onOpenWords,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp),
-                shape = RoundedCornerShape(18.dp),
-                border = BorderStroke(2.dp, AppGreen.copy(alpha = 0.55f)),
-            ) {
-                Text("🔊  Сөздерді тыңдау кітапханасы", color = AppGreen, fontWeight = FontWeight.ExtraBold)
-            }
-            Text(
-                text = "Ескерту: бұл ойындар сөйлеу мен тілді күнделікті қолдауға арналған. Олар маман бағалауын немесе емін алмастырмайды.",
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 20.dp),
-                color = AppText.copy(alpha = 0.45f),
-                fontSize = 11.sp,
-                lineHeight = 16.sp,
-                textAlign = TextAlign.Center,
-            )
         }
     }
 }
 
 @Composable
-private fun LevelCard(
+private fun LevelRouteMap(
+    levels: List<CurriculumLevel>,
+    progress: ProgressRepository,
+    onOpenLevel: (Int) -> Unit
+) {
+    val scrollState = rememberScrollState()
+    
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState, reverseScrolling = true)
+            .padding(vertical = 100.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        levels.reversed().forEachIndexed { index, level ->
+            val unlocked = progress.isLevelUnlocked(level.id)
+            val levelProgress = progress.levelProgress(level)
+            val stars = progress.levelStars(level)
+            
+            val alignment = when (index % 3) {
+                0 -> Alignment.Center
+                1 -> Alignment.CenterStart
+                2 -> Alignment.CenterEnd
+                else -> Alignment.Center
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 60.dp),
+                contentAlignment = alignment
+            ) {
+                LevelNode(
+                    level = level,
+                    unlocked = unlocked,
+                    progress = levelProgress,
+                    stars = stars,
+                    onClick = { if (unlocked) onOpenLevel(level.id) }
+                )
+            }
+            
+            if (index < levels.lastIndex) {
+                MapPathConnector(index)
+            }
+        }
+    }
+    
+    LaunchedEffect(Unit) {
+        val currentLevelIndex = levels.indexOfFirst { !progress.isLevelUnlocked(it.id) }.let { if (it == -1) levels.size - 1 else it }
+        // Potential auto-scroll logic here
+    }
+}
+
+@Composable
+private fun MapPathConnector(index: Int) {
+    Canvas(modifier = Modifier.height(120.dp).fillMaxWidth(0.6f)) {
+        val w = size.width
+        val h = size.height
+        val path = Path()
+        
+        val startX = when (index % 3) {
+            0 -> w / 2
+            1 -> w * 0.2f
+            2 -> w * 0.8f
+            else -> w / 2
+        }
+        
+        val endX = when ((index + 1) % 3) {
+            0 -> w / 2
+            1 -> w * 0.2f
+            2 -> w * 0.8f
+            else -> w / 2
+        }
+
+        path.moveTo(startX, 0f)
+        path.cubicTo(startX, h * 0.5f, endX, h * 0.5f, endX, h)
+        
+        drawPath(
+            path = path,
+            color = Color(0xFFD1D9E0).copy(alpha = 0.6f),
+            style = Stroke(
+                width = 8.dp.toPx(), 
+                cap = StrokeCap.Round, 
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(20f, 25f))
+            )
+        )
+    }
+}
+
+@Composable
+private fun LevelNode(
     level: CurriculumLevel,
     unlocked: Boolean,
     progress: Float,
     stars: Int,
-    onClick: () -> Unit,
+    onClick: () -> Unit
 ) {
-    val colors = levelGradient(level.id)
-    Card(
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 7.dp)
-            .clickable(enabled = unlocked, onClick = onClick),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (unlocked) 3.dp else 0.dp),
+            .width(140.dp)
+            .clickable(enabled = unlocked, onClick = onClick)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    if (unlocked) Brush.linearGradient(colors)
-                    else Brush.linearGradient(listOf(Color(0xFFE8EBEE), Color(0xFFF2F3F4))),
-                )
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(110.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(58.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.78f)),
-                contentAlignment = Alignment.Center,
+            Surface(
+                modifier = Modifier.size(86.dp).padding(top = 6.dp),
+                shape = CircleShape,
+                color = Color.Black.copy(alpha = 0.15f)
+            ) {}
+            
+            Surface(
+                modifier = Modifier.size(86.dp),
+                shape = CircleShape,
+                color = if (unlocked) Color.White else Color(0xFFE0E0E0),
+                border = BorderStroke(4.dp, if (unlocked) levelNodeColor(level.id) else Color.White),
+                shadowElevation = if (unlocked) 6.dp else 0.dp
             ) {
-                Text(if (unlocked) level.emoji else "🔒", fontSize = 31.sp)
-            }
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 14.dp),
-            ) {
-                Text(
-                    text = "${level.id}-деңгей • ${level.title}",
-                    color = if (unlocked) AppText else AppText.copy(alpha = 0.48f),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                )
-                Text(
-                    text = if (unlocked) level.focus else "Алдыңғы деңгейді аяқта",
-                    modifier = Modifier.padding(top = 3.dp),
-                    color = AppText.copy(alpha = 0.58f),
-                    fontSize = 11.sp,
-                )
                 if (unlocked) {
-                    LinearProgressIndicator(
-                        progress = progress,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 9.dp)
-                            .height(6.dp)
-                            .clip(CircleShape),
-                        color = AppGreen,
-                        trackColor = Color.White.copy(alpha = 0.65f),
+                    NetworkImageBackground(url = level.imageUrl, alpha = 0.7f)
+                }
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = if (unlocked) level.emoji else "🔒", 
+                        fontSize = 42.sp,
+                        modifier = Modifier.graphicsLayer {
+                            if (!unlocked) alpha = 0.5f
+                        }
                     )
                 }
             }
-            if (unlocked) {
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("$stars/9 ⭐", color = AppText, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Text("→", color = AppBlue, fontSize = 24.sp)
+            
+            if (unlocked && progress > 0f) {
+                Canvas(modifier = Modifier.size(100.dp)) {
+                    drawArc(
+                        color = AppGreen,
+                        startAngle = -90f,
+                        sweepAngle = 360f * progress,
+                        useCenter = false,
+                        style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
+                    )
+                }
+            }
+
+            if (unlocked && stars > 0) {
+                Surface(
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 4.dp, bottom = 4.dp).size(32.dp),
+                    shape = CircleShape,
+                    color = AppGold,
+                    border = BorderStroke(2.dp, Color.White),
+                    shadowElevation = 4.dp
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text("$stars", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    }
                 }
             }
         }
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Surface(
+            color = if (unlocked) Color.White.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.5f),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, if (unlocked) levelNodeColor(level.id) else Color.Transparent)
+        ) {
+            Text(
+                text = level.title,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                color = if (unlocked) AppText else AppText.copy(alpha = 0.5f),
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center
+            )
+        }
     }
+}
+
+private fun levelNodeColor(levelId: Int): Color = when (levelId) {
+    1 -> Color(0xFF81D4FA)
+    2 -> Color(0xFFA5D6A7)
+    3 -> Color(0xFFFFE082)
+    4 -> Color(0xFFCE93D8)
+    5 -> Color(0xFFFFAB91)
+    else -> Color(0xFFB0BEC5)
 }
 
 @Composable
@@ -593,100 +653,142 @@ private fun LevelHubScreen(
     progress: ProgressRepository,
     progressRevision: Int,
     audio: SpeechAudio,
+    repository: FirebaseRepository,
+    scope: kotlinx.coroutines.CoroutineScope,
     onBack: () -> Unit,
     onOpenActivity: (GameActivity) -> Unit,
 ) {
     @Suppress("UNUSED_VARIABLE") val observeRevision = progressRevision
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(AppBackground)
-            .statusBarsPadding(),
-    ) {
-        AppTopBar(title = "${level.id}-деңгей", onBack = onBack)
+    Box(modifier = Modifier.fillMaxSize()) {
+        NetworkImageBackground(url = level.imageUrl, alpha = 0.2f)
+        
         Column(
             modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp, vertical = 10.dp),
+                .fillMaxSize()
+                .statusBarsPadding(),
         ) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                shape = RoundedCornerShape(24.dp),
+            AppTopBar(title = level.title, onBack = onBack)
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Brush.linearGradient(levelGradient(level.id)))
-                        .padding(20.dp),
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.9f)),
+                    shape = RoundedCornerShape(24.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
-                    Text(level.emoji, fontSize = 48.sp)
-                    Text(
-                        text = level.title,
-                        modifier = Modifier.padding(top = 8.dp),
-                        color = AppText,
-                        style = MaterialTheme.typography.headlineMedium,
-                    )
-                    Text(level.subtitle, color = AppText.copy(alpha = 0.66f), fontSize = 14.sp)
-                    Text(
-                        text = level.focus,
-                        modifier = Modifier.padding(top = 12.dp),
-                        color = AppPurple,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    LinearProgressIndicator(
-                        progress = progress.levelProgress(level),
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 12.dp)
-                            .height(8.dp)
-                            .clip(CircleShape),
-                        color = AppGreen,
-                        trackColor = Color.White.copy(alpha = 0.7f),
+                            .padding(20.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(level.emoji, fontSize = 56.sp)
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column {
+                                Text(
+                                    text = level.title,
+                                    color = AppText,
+                                    style = MaterialTheme.typography.headlineMedium,
+                                )
+                                Text(level.subtitle, color = AppText.copy(alpha = 0.66f), fontSize = 14.sp)
+                            }
+                        }
+                        
+                        Text(
+                            text = level.focus,
+                            modifier = Modifier.padding(top = 12.dp),
+                            color = AppPurple,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        
+                        LinearProgressIndicator(
+                            progress = progress.levelProgress(level),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 16.dp)
+                                .height(10.dp)
+                                .clip(CircleShape),
+                            color = AppGreen,
+                            trackColor = AppBlue.copy(alpha = 0.1f),
+                        )
+                    }
+                }
+
+                if (level.vocabulary.isNotEmpty()) {
+                    Text(
+                        text = "Жаңа сөздер",
+                        modifier = Modifier.padding(top = 22.dp, bottom = 12.dp),
+                        color = AppText,
+                        fontSize = 21.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                    )
+                    
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        level.vocabulary.forEach { word ->
+                        VocabularyCard(
+                            word = word,
+                            learned = progress.learnedWordIds.contains(word.id),
+                            audio = audio,
+                            onLearn = { 
+                                progress.markWordAsLearned(word.id)
+                                scope.launch {
+                                    repository.saveLearnedWord(word.id)
+                                }
+                            }
+                        )
+                    }
+                    }
+                }
+
+                Text(
+                    text = "Ойындар",
+                    modifier = Modifier.padding(top = 22.dp, bottom = 8.dp),
+                    color = AppText,
+                    fontSize = 21.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                )
+                level.activities.forEachIndexed { index, activity ->
+                    ActivityCard(
+                        number = index + 1,
+                        activity = activity,
+                        completed = progress.isCompleted(activity.id),
+                        stars = progress.starsFor(activity.id),
+                        bestScore = progress.bestScoreFor(activity.id),
+                        onClick = { onOpenActivity(activity) },
                     )
                 }
-            }
 
-            Text(
-                text = "Ойындар",
-                modifier = Modifier.padding(top = 22.dp, bottom = 8.dp),
-                color = AppText,
-                fontSize = 21.sp,
-                fontWeight = FontWeight.ExtraBold,
-            )
-            level.activities.forEachIndexed { index, activity ->
-                ActivityCard(
-                    number = index + 1,
-                    activity = activity,
-                    completed = progress.isCompleted(activity.id),
-                    stars = progress.starsFor(activity.id),
-                    bestScore = progress.bestScoreFor(activity.id),
-                    onClick = { onOpenActivity(activity) },
-                )
-            }
-
-            InfoStrip(
-                emoji = "👪",
-                text = "Ересекпен бірге ойнаса, пайдасы артады: баланың жауабын күтіңіз, сөзін бөлмеңіз, кейін бір-екі сөз қосып дұрыс үлгі беріңіз.",
-                color = Color(0xFFF2E9FF),
-            )
-            if (!audio.ready) {
                 InfoStrip(
-                    emoji = "🔊",
-                    text = "Дауыс қозғалтқышы дайындалып жатыр. Бірнеше секундтан кейін тыңдау түймелері белсенді болады.",
-                    color = Color(0xFFFFF1D9),
+                    emoji = "⭐",
+                    text = "Барлық ойындарды аяқтап, жұлдыздарды жина! Сенің қолыңнан келеді!",
+                    color = Color(0xFFFFF9E6),
+                )
+                if (!audio.ready) {
+                    InfoStrip(
+                        emoji = "🔊",
+                        text = "Дауыс қозғалтқышы дайындалып жатыр. Бірнеше секундтан кейін тыңдау түймелері белсенді болады.",
+                        color = Color(0xFFFFF1D9),
+                    )
+                }
+                Text(
+                    text = "Бұл деңгейде уақыт шектеуі жоқ. Қате жауап жазаланбайды; дұрыс үлгі көрсетіліп, бала келесі тапсырмаға өте алады.",
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 18.dp),
+                    color = AppText.copy(alpha = 0.48f),
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 16.sp,
                 )
             }
-            Text(
-                text = "Бұл деңгейде уақыт шектеуі жоқ. Қате жауап жазаланбайды; дұрыс үлгі көрсетіліп, бала келесі тапсырмаға өте алады.",
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 18.dp),
-                color = AppText.copy(alpha = 0.48f),
-                fontSize = 11.sp,
-                textAlign = TextAlign.Center,
-                lineHeight = 16.sp,
-            )
         }
     }
 }
@@ -752,75 +854,289 @@ private fun ActivityCard(
 }
 
 @Composable
-private fun WordLibraryScreen(audio: SpeechAudio, onBack: () -> Unit) {
-    val groups = listOf(
-        "Жемістер" to listOf("🍎" to "алма", "🍐" to "алмұрт", "🍌" to "банан", "🍉" to "қарбыз", "🍇" to "жүзім", "🍓" to "құлпынай"),
-        "Жануарлар" to listOf("🐱" to "мысық", "🐶" to "күшік", "🐟" to "балық", "🐦" to "құс", "🐘" to "піл", "🦋" to "көбелек"),
-        "Әрекеттер" to listOf("🏃" to "жүгіру", "🦘" to "секіру", "🥤" to "ішу", "🍽️" to "жеу", "📖" to "оқу", "😴" to "ұйықтау"),
-        "Сезімдер" to listOf("😊" to "қуанышты", "😢" to "мұңды", "😨" to "қорықты", "😠" to "ренжіді", "😮" to "таңғалды", "😌" to "тыныш"),
-    )
+private fun WordLibraryScreen(
+    progress: ProgressRepository,
+    audio: SpeechAudio, 
+    onBack: () -> Unit
+) {
+    val learnedIds = progress.learnedWordIds
+    val learnedWords = Curriculum.levels.flatMap { it.vocabulary }.filter { it.id in learnedIds }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(AppBackground)
             .statusBarsPadding(),
     ) {
-        AppTopBar(title = "Сөздерді тыңдау", onBack = onBack)
+        AppTopBar(title = "Сөздік қорым", onBack = onBack)
         Column(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 18.dp, vertical = 8.dp),
         ) {
-            Text(
-                text = "Сөзді басып тыңда. Кейін сол сөзбен қысқа сөйлем ойлап көр.",
-                color = AppText.copy(alpha = 0.67f),
-                lineHeight = 20.sp,
-            )
-            groups.forEach { (title, words) ->
+            if (learnedWords.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("🏜️", fontSize = 64.sp)
+                        Text(
+                            "Әзірге сөздер жоқ.",
+                            color = AppText.copy(alpha = 0.5f),
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 16.dp)
+                        )
+                        Text(
+                            "Деңгейлерді өтіп, жаңа сөздерді аш!",
+                            color = AppText.copy(alpha = 0.4f),
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                }
+            } else {
                 Text(
-                    text = title,
-                    modifier = Modifier.padding(top = 20.dp, bottom = 8.dp),
-                    color = AppPurple,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.ExtraBold,
+                    text = "Сен ${learnedWords.size} сөз үйрендің! Қайталап көр:",
+                    color = AppText.copy(alpha = 0.67f),
+                    lineHeight = 20.sp,
+                    modifier = Modifier.padding(bottom = 16.dp)
                 )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    mainAxisSpacing = 12.dp,
+                    crossAxisSpacing = 12.dp
                 ) {
-                    words.forEach { (emoji, word) ->
+                    learnedWords.forEach { word ->
                         Card(
                             modifier = Modifier
-                                .width(132.dp)
-                                .height(128.dp)
-                                .clickable(enabled = audio.ready) { audio.speak(word, slower = true) },
+                                .width(120.dp)
+                                .clickable { audio.speak(word.word) },
                             shape = RoundedCornerShape(20.dp),
                             colors = CardDefaults.cardColors(containerColor = Color.White),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                            border = BorderStroke(1.dp, AppBlue.copy(alpha = 0.1f))
                         ) {
-                            Column(
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                            ) {
-                                Text(emoji, fontSize = 47.sp)
-                                Text(word, color = AppText, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                                Text("🔊 тыңдау", color = AppBlue, fontSize = 10.sp)
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(56.dp)
+                                            .clip(CircleShape)
+                                            .background(AppBlue.copy(alpha = 0.05f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(word.emoji, fontSize = 32.sp)
+                                    }
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Text(
+                                        word.word, 
+                                        color = AppText, 
+                                        fontWeight = FontWeight.Bold, 
+                                        fontSize = 15.sp,
+                                        maxLines = 1,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(AppBlue.copy(alpha = 0.1f))
+                                            .clickable { audio.speak(word.word) }
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            "🔊 Тыңдау", 
+                                            color = AppBlue, 
+                                            fontSize = 10.sp, 
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
+            
+            Spacer(modifier = Modifier.height(24.dp))
             InfoStrip(
-                emoji = "💡",
-                text = "Тек қайталатумен шектелмеңіз. «Мысық» дегеннен кейін «Мысық не істеп жатыр?» деп қысқа әңгіме бастаңыз.",
-                color = Color(0xFFEAF8E5),
+                emoji = "🚀",
+                text = "Сөздерді тыңдап, оларды достарыңа немесе ойыншықтарыңа айтып бер! Сенің сөздерің сиқырлы!",
+                color = Color(0xFFEAF8FF),
             )
             Spacer(modifier = Modifier.height(24.dp))
         }
+    }
+}
+
+@Composable
+fun FlowRow(
+    modifier: Modifier = Modifier,
+    mainAxisSpacing: androidx.compose.ui.unit.Dp = 0.dp,
+    crossAxisSpacing: androidx.compose.ui.unit.Dp = 0.dp,
+    content: @Composable () -> Unit
+) {
+    androidx.compose.ui.layout.Layout(content = content, modifier = modifier) { measurables, constraints ->
+        val placeables = measurables.map { it.measure(constraints.copy(minWidth = 0, minHeight = 0)) }
+        var x = 0
+        var y = 0
+        var rowMaxHeight = 0
+        val positions = mutableListOf<Pair<Int, Int>>()
+        
+        placeables.forEach { placeable ->
+            if (x + placeable.width > constraints.maxWidth && x > 0) {
+                x = 0
+                y += rowMaxHeight + crossAxisSpacing.roundToPx()
+                rowMaxHeight = 0
+            }
+            positions.add(x to y)
+            rowMaxHeight = maxOf(rowMaxHeight, placeable.height)
+            x += placeable.width + mainAxisSpacing.roundToPx()
+        }
+        
+        val totalHeight = if (placeables.isEmpty()) 0 else y + rowMaxHeight
+        layout(constraints.maxWidth, totalHeight) {
+            placeables.forEachIndexed { index, placeable ->
+                val (px, py) = positions[index]
+                placeable.place(px, py)
+            }
+        }
+    }
+}
+
+@Composable
+private fun VocabularyCard(
+    word: VocabularyWord,
+    learned: Boolean,
+    audio: SpeechAudio,
+    onLearn: () -> Unit
+) {
+    var showDialog by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier
+            .width(150.dp)
+            .height(170.dp)
+            .clickable { 
+                showDialog = true
+                audio.speak(word.word)
+                if (!learned) onLearn()
+            },
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (learned) Color.White else Color(0xFFF5F7F9)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (learned) 4.dp else 1.dp),
+        border = if (learned) BorderStroke(2.dp, AppGreen.copy(alpha = 0.4f)) else BorderStroke(1.dp, Color(0xFFE0E0E0))
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(CircleShape)
+                        .background(if (learned) AppGreen.copy(alpha = 0.1f) else Color.White),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(word.emoji, fontSize = 46.sp)
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = word.word,
+                    color = AppText,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 19.sp,
+                    textAlign = TextAlign.Center
+                )
+                if (learned) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                        Text("✅ Білемін", color = AppGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            
+            // Listen Icon in top right
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .size(32.dp)
+                    .clickable { audio.speak(word.word) },
+                color = AppBlue.copy(alpha = 0.15f),
+                shape = CircleShape
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text("🔊", fontSize = 14.sp)
+                }
+            }
+        }
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            confirmButton = {
+                Button(
+                    onClick = { showDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = AppBlue),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("Жарайды")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { audio.speak(word.word) },
+                    border = BorderStroke(2.dp, AppBlue),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("🔊 Тыңдау", color = AppBlue)
+                }
+            },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        modifier = Modifier.size(48.dp),
+                        shape = CircleShape,
+                        color = AppBlue.copy(alpha = 0.1f)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(word.emoji, fontSize = 28.sp)
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(word.word, fontWeight = FontWeight.Black, fontSize = 24.sp, color = AppText)
+                }
+            },
+            text = {
+                Column {
+                    Text(word.definition, fontSize = 16.sp, color = AppText)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Surface(
+                        color = AppBlue.copy(alpha = 0.05f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, AppBlue.copy(alpha = 0.1f))
+                    ) {
+                        Text(
+                            text = "Үлгі: \"${word.example}\"",
+                            modifier = Modifier.padding(12.dp),
+                            color = AppBlue,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            },
+            shape = RoundedCornerShape(28.dp)
+        )
     }
 }
 
@@ -946,6 +1262,15 @@ private fun ParentDashboardScreen(
                 }
             }
 
+            val diffCount = progress.getDifficultWords().size
+            if (diffCount > 0) {
+                InfoStrip(
+                    emoji = "🗣️",
+                    text = "Балаңыз $diffCount сөзді айтуда қиындық көріп жүр. Нәтижелер бөлімінен толығырақ көре аласыз.",
+                    color = Color(0xFFFFF3E0)
+                )
+            }
+
             InfoStrip(
                 emoji = "🩺",
                 text = "Егер бала айтылғанды жиі түсінбесе, дыбысқа жауап бермесе, сөйлеуі кері кетсе немесе отбасы алаңдаса, педиатрға, есту маманына не логопедке жүгініңіз. Қосымша ерте көмек пайдалы болуы мүмкін.",
@@ -1035,9 +1360,40 @@ private fun StatisticsScreen(
             }
             InfoStrip(
                 emoji = "ℹ️",
-                text = "Ұпайлар клиникалық өлшем емес. Олар тек қолданбадағы тапсырмаларды аяқтау мен қайталауды көрсетеді.",
+                text = "Ұпайлар клиникалық өлшем емес. Олар тек қолданбадағы тапсырмаларды аяқтау мен қайталатуды көрсетеді.",
                 color = Color(0xFFEAF8FF),
             )
+            
+            val difficultWords = progress.getDifficultWords()
+            if (difficultWords.isNotEmpty()) {
+                Text(
+                    text = "Қайталауды қажет ететін сөздер",
+                    modifier = Modifier.padding(top = 24.dp, bottom = 10.dp),
+                    color = AppPurple,
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                )
+                
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color.White,
+                    shape = RoundedCornerShape(20.dp),
+                    border = BorderStroke(1.dp, Color(0xFFE5EBF0))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        difficultWords.forEach { (word, count) ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(word, color = AppText, fontWeight = FontWeight.Bold)
+                                Text("$count рет қате", color = Color.Red, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            }
+            
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
@@ -1215,20 +1571,21 @@ private fun ProgressRing(
 }
 
 @Composable
-private fun StatPill(emoji: String, value: String, label: String, modifier: Modifier = Modifier) {
+private fun StatPill(emoji: String, value: String, label: String, modifier: Modifier = Modifier, color: Color = AppText) {
     Surface(
         modifier = modifier,
-        color = Color.White,
+        color = Color.White.copy(alpha = 0.9f),
         shape = RoundedCornerShape(17.dp),
-        border = BorderStroke(1.dp, Color(0xFFE6EBEF)),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.3f)),
+        shadowElevation = 2.dp
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 11.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(emoji, fontSize = 21.sp)
-            Text(value, color = AppText, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
-            Text(label, color = AppText.copy(alpha = 0.52f), fontSize = 9.sp, textAlign = TextAlign.Center)
+            Text(value, color = color, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+            Text(label, color = color.copy(alpha = 0.7f), fontSize = 9.sp, textAlign = TextAlign.Center)
         }
     }
 }
@@ -1262,44 +1619,55 @@ private fun AppTopBar(
     trailing: String? = null,
     onTrailing: () -> Unit = {},
 ) {
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(64.dp)
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .background(Brush.horizontalGradient(listOf(AppBlue, AppTurquoise.copy(alpha = 0.8f))))
     ) {
-        if (onBack != null) {
-            BackButton(onClick = onBack)
-        } else {
-            Spacer(modifier = Modifier.size(42.dp))
-        }
-        Text(
-            text = title,
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 8.dp),
-            color = AppText,
-            fontSize = 19.sp,
-            fontWeight = FontWeight.ExtraBold,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
+        KazakhPatternBackground(
+            modifier = Modifier.fillMaxSize(),
+            color = Color.White.copy(alpha = 0.15f),
+            strokeWidth = 1f
         )
-        if (trailing != null) {
-            Surface(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clickable(onClick = onTrailing),
-                color = Color(0xFFEAF8FF),
-                shape = CircleShape,
-            ) {
-                Box(contentAlignment = Alignment.Center) { Text(trailing, fontSize = 21.sp) }
+        
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (onBack != null) {
+                BackButton(onClick = onBack)
+            } else {
+                Spacer(modifier = Modifier.size(42.dp))
             }
-        } else {
-            Spacer(modifier = Modifier.size(42.dp))
+            Text(
+                text = title,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp),
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.ExtraBold,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+            )
+            if (trailing != null) {
+                Surface(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clickable(onClick = onTrailing),
+                    color = Color.White.copy(alpha = 0.2f),
+                    shape = CircleShape,
+                ) {
+                    Box(contentAlignment = Alignment.Center) { Text(trailing, fontSize = 21.sp) }
+                }
+            } else {
+                Spacer(modifier = Modifier.size(42.dp))
+            }
         }
     }
-    Divider(color = Color(0xFFE9EEF2), thickness = 1.dp)
 }
 
 @Composable

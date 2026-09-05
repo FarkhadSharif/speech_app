@@ -86,6 +86,50 @@ class ProgressRepository(context: Context, uid: String) {
         revision += 1
     }
 
+    fun logPronunciationFail(word: String) {
+        val currentFails = getPronunciationFailsMap().toMutableMap()
+        currentFails[word] = (currentFails[word] ?: 0) + 1
+        
+        // Simple serialization: word1:count1,word2:count2
+        val serialized = currentFails.entries.joinToString(",") { "${it.key}:${it.value}" }
+        preferences.edit().putString(KEY_PRONUNCIATION_FAILS, serialized).apply()
+        revision += 1
+    }
+
+    fun getDifficultWords(): List<Pair<String, Int>> {
+        return getPronunciationFailsMap().toList()
+            .sortedByDescending { it.second }
+            .take(10)
+    }
+
+    private fun getPronunciationFailsMap(): Map<String, Int> {
+        val serialized = preferences.getString(KEY_PRONUNCIATION_FAILS, "") ?: ""
+        if (serialized.isBlank()) return emptyMap()
+        
+        return try {
+            serialized.split(",").associate {
+                val parts = it.split(":")
+                parts[0] to parts[1].toInt()
+            }
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
+    val learnedWordIds: Set<String>
+        get() = preferences.getStringSet(KEY_LEARNED_WORDS, emptySet()).orEmpty().toSet()
+
+    fun markWordAsLearned(wordId: String) {
+        val learned = learnedWordIds.toMutableSet().apply { add(wordId) }
+        preferences.edit().putStringSet(KEY_LEARNED_WORDS, learned).apply()
+        revision += 1
+    }
+
+    fun updateLearnedWords(wordIds: Set<String>) {
+        preferences.edit().putStringSet(KEY_LEARNED_WORDS, wordIds).apply()
+        revision += 1
+    }
+
     fun resetProgress() {
         preferences.edit().clear().apply()
         revision += 1
@@ -95,6 +139,8 @@ class ProgressRepository(context: Context, uid: String) {
         private const val KEY_COMPLETED = "completed_activities"
         private const val KEY_ACTIVE_DAYS = "active_days"
         private const val KEY_SESSIONS = "sessions"
+        private const val KEY_PRONUNCIATION_FAILS = "pronunciation_fails"
+        private const val KEY_LEARNED_WORDS = "learned_words"
     }
 }
 

@@ -10,78 +10,51 @@ import android.speech.SpeechRecognizer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.farkhad.speechapp.audio.SpeechAudio
-import com.farkhad.speechapp.model.ArrangeWordsRound
-import com.farkhad.speechapp.model.ChoiceRound
-import com.farkhad.speechapp.model.ExerciseRound
-import com.farkhad.speechapp.model.GameActivity
-import com.farkhad.speechapp.model.StoryOrderRound
-import com.farkhad.speechapp.model.TapCountRound
-import com.farkhad.speechapp.model.VoiceRound
-import com.farkhad.speechapp.model.scoreSpokenPhrase
-import com.farkhad.speechapp.ui.theme.AppBackground
-import com.farkhad.speechapp.ui.theme.AppBlue
-import com.farkhad.speechapp.ui.theme.AppGreen
-import com.farkhad.speechapp.ui.theme.AppOrange
-import com.farkhad.speechapp.ui.theme.AppPurple
-import com.farkhad.speechapp.ui.theme.AppText
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
+import com.farkhad.speechapp.audio.*
+import com.farkhad.speechapp.data.FirebaseRepository
+import com.farkhad.speechapp.data.ProgressRepository
+import com.farkhad.speechapp.model.*
+import com.farkhad.speechapp.ui.theme.*
 import kotlinx.coroutines.delay
-import java.util.Locale
+import kotlinx.coroutines.launch
 import kotlin.random.Random
 
 @Composable
 fun GameSessionScreen(
     activity: GameActivity,
+    progress: ProgressRepository,
     audio: SpeechAudio,
+    repository: FirebaseRepository,
     onBack: () -> Unit,
     onSaveResult: (Int) -> Unit,
     onNextActivity: () -> Unit,
@@ -111,155 +84,191 @@ fun GameSessionScreen(
 
     val round = activity.rounds[roundIndex]
     val roundProgress = (roundIndex + 1).toFloat() / activity.rounds.size
+    val level = remember(activity.id) { Curriculum.levelForActivity(activity.id) }
 
     LaunchedEffect(round.id, audio.ready) {
         if (!audio.ready) return@LaunchedEffect
-        delay(450)
+        delay(600)
         audio.speak(round.spokenModel(), slower = round is VoiceRound || round is TapCountRound)
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(AppBackground)
-            .statusBarsPadding(),
-    ) {
-        GameHeader(
-            title = activity.title,
-            emoji = activity.emoji,
-            onBack = onBack,
+    Box(modifier = Modifier.fillMaxSize().background(AppBackground)) {
+        NetworkImageBackground(url = level.imageUrl, alpha = 0.15f)
+        KazakhPatternBackground(
+            modifier = Modifier.fillMaxSize(),
+            color = AppBlue.copy(alpha = 0.05f),
+            strokeWidth = 3f
         )
-        LinearProgressIndicator(
-            progress = roundProgress,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(7.dp),
-            color = AppGreen,
-            trackColor = Color(0xFFE7EEF3),
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "${roundIndex + 1}/${activity.rounds.size}",
-                color = AppText.copy(alpha = 0.55f),
-                fontWeight = FontWeight.Bold,
-            )
-            ListenButton(
-                enabled = audio.ready,
-                onClick = { audio.speak(round.spokenModel(), slower = round is VoiceRound || round is TapCountRound) },
-            )
-        }
-
+        
         Column(
             modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 4.dp),
+                .fillMaxSize()
+                .statusBarsPadding(),
         ) {
-            Text(
-                text = round.instruction,
-                modifier = Modifier.fillMaxWidth(),
-                color = AppBlue,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.ExtraBold,
-                textAlign = TextAlign.Center,
+            GameHeader(
+                title = activity.title,
+                emoji = activity.emoji,
+                onBack = onBack,
             )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            when (round) {
-                is ChoiceRound -> ChoiceExercise(
-                    round = round,
-                    audio = audio,
-                    enabled = !roundFinished,
-                    onEvaluated = { points ->
-                        if (!roundFinished) {
-                            earnedPoints += points
-                            roundFinished = true
-                        }
-                    },
-                )
-
-                is TapCountRound -> TapCountExercise(
-                    round = round,
-                    audio = audio,
-                    enabled = !roundFinished,
-                    onEvaluated = { points ->
-                        if (!roundFinished) {
-                            earnedPoints += points
-                            roundFinished = true
-                        }
-                    },
-                )
-
-                is ArrangeWordsRound -> ArrangeWordsExercise(
-                    round = round,
-                    audio = audio,
-                    enabled = !roundFinished,
-                    onEvaluated = { points ->
-                        if (!roundFinished) {
-                            earnedPoints += points
-                            roundFinished = true
-                        }
-                    },
-                )
-
-                is StoryOrderRound -> StoryOrderExercise(
-                    round = round,
-                    audio = audio,
-                    enabled = !roundFinished,
-                    onEvaluated = { points ->
-                        if (!roundFinished) {
-                            earnedPoints += points
-                            roundFinished = true
-                        }
-                    },
-                )
-
-                is VoiceRound -> VoiceExercise(
-                    round = round,
-                    audio = audio,
-                    enabled = !roundFinished,
-                    onEvaluated = { points ->
-                        if (!roundFinished) {
-                            earnedPoints += points
-                            roundFinished = true
-                        }
-                    },
-                )
-            }
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-
-        AnimatedVisibility(visible = roundFinished) {
-            Button(
-                onClick = {
-                    if (roundIndex == activity.rounds.lastIndex) {
-                        val score = (earnedPoints.toFloat() / activity.rounds.size).toInt().coerceIn(0, 100)
-                        resultScore = score
-                        onSaveResult(score)
-                        audio.playCelebration()
-                    } else {
-                        roundIndex += 1
-                    }
-                },
+            
+            LinearProgressIndicator(
+                progress = roundProgress,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 14.dp)
-                    .height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AppGreen),
+                    .height(10.dp)
+                    .padding(horizontal = 24.dp)
+                    .clip(CircleShape)
+                    .shadow(2.dp, CircleShape),
+                color = AppGreen,
+                trackColor = AppBlue.copy(alpha = 0.1f),
+            )
+            
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = if (roundIndex == activity.rounds.lastIndex) "Нәтижені көру ⭐" else "Келесі тапсырма →",
-                    color = Color.White,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 16.sp,
+                Surface(
+                    color = AppBlue.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, AppBlue.copy(alpha = 0.3f))
+                ) {
+                    Text(
+                        text = " 🇰🇿 Тапсырма ${roundIndex + 1}/${activity.rounds.size} ",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        color = AppText,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+                ListenButton(
+                    enabled = audio.ready,
+                    onClick = { audio.speak(round.spokenModel(), slower = round is VoiceRound || round is TapCountRound) },
                 )
+            }
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color.White.copy(alpha = 0.9f),
+                    shape = RoundedCornerShape(24.dp),
+                    shadowElevation = 4.dp,
+                    border = BorderStroke(2.dp, AppBlue.copy(alpha = 0.2f))
+                ) {
+                    Text(
+                        text = round.instruction,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        color = AppText,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(32.dp))
+
+                when (round) {
+                    is ChoiceRound -> ChoiceExercise(
+                        round = round,
+                        audio = audio,
+                        enabled = !roundFinished,
+                        onEvaluated = { points ->
+                            if (!roundFinished) {
+                                earnedPoints += points
+                                roundFinished = true
+                            }
+                        },
+                    )
+                    is TapCountRound -> TapCountExercise(
+                        round = round,
+                        audio = audio,
+                        enabled = !roundFinished,
+                        onEvaluated = { points ->
+                            if (!roundFinished) {
+                                earnedPoints += points
+                                roundFinished = true
+                            }
+                        },
+                    )
+                    is ArrangeWordsRound -> ArrangeWordsExercise(
+                        round = round,
+                        audio = audio,
+                        enabled = !roundFinished,
+                        onEvaluated = { points ->
+                            if (!roundFinished) {
+                                earnedPoints += points
+                                roundFinished = true
+                            }
+                        },
+                    )
+                    is StoryOrderRound -> StoryOrderExercise(
+                        round = round,
+                        audio = audio,
+                        enabled = !roundFinished,
+                        onEvaluated = { points ->
+                            if (!roundFinished) {
+                                earnedPoints += points
+                                roundFinished = true
+                            }
+                        },
+                    )
+                    is VoiceRound -> VoiceExercise(
+                        round = round,
+                        progress = progress,
+                        audio = audio,
+                        repository = repository,
+                        enabled = !roundFinished,
+                        onEvaluated = { points ->
+                            if (!roundFinished) {
+                                earnedPoints += points
+                                roundFinished = true
+                            }
+                        },
+                    )
+                }
+                Spacer(modifier = Modifier.height(32.dp))
+            }
+
+            AnimatedVisibility(
+                visible = roundFinished,
+                modifier = Modifier.padding(24.dp)
+            ) {
+                Button(
+                    onClick = {
+                        if (roundIndex == activity.rounds.lastIndex) {
+                            val score = (earnedPoints.toFloat() / activity.rounds.size).toInt().coerceIn(0, 100)
+                            resultScore = score
+                            onSaveResult(score)
+                            audio.playCelebration()
+                        } else {
+                            roundIndex += 1
+                            roundFinished = false
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(64.dp)
+                        .shadow(8.dp, RoundedCornerShape(20.dp)),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = AppGreen),
+                ) {
+                    Text(
+                        text = if (roundIndex == activity.rounds.lastIndex) "Нәтижені көру ✨" else "Алға, келесі тапсырма →",
+                        color = Color.White,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 18.sp,
+                    )
+                }
             }
         }
     }
@@ -286,54 +295,55 @@ private fun ChoiceExercise(
     QuestionCard {
         Text(
             text = round.display,
-            fontSize = if (round.display.length <= 8) 40.sp else 24.sp,
+            fontSize = if (round.display.length <= 8) 48.sp else 32.sp,
             fontWeight = FontWeight.ExtraBold,
             color = AppText,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
     }
-    Spacer(modifier = Modifier.height(18.dp))
+    Spacer(modifier = Modifier.height(24.dp))
 
     round.options.forEachIndexed { index, option ->
         val isSelected = selected == index
         val isCorrectAnswer = index == round.correctIndex
         val container = when {
-            selected != null && isCorrectAnswer -> Color(0xFFDDF8D8)
-            isSelected -> Color(0xFFFFE8D1)
+            selected != null && isCorrectAnswer -> Color(0xFFE8F5E9)
+            isSelected -> Color(0xFFFFF3E0)
             else -> Color.White
         }
         val border = when {
             selected != null && isCorrectAnswer -> AppGreen
             isSelected -> AppOrange
-            else -> Color(0xFFDDE5EC)
+            else -> Color(0xFFE0E0E0)
         }
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 6.dp)
-                .clip(RoundedCornerShape(16.dp))
+                .padding(vertical = 8.dp)
+                .clip(RoundedCornerShape(20.dp))
                 .clickable(enabled = enabled && selected == null) {
                     selected = index
                     if (isCorrectAnswer) {
                         audio.playCorrect()
-                        audio.speak("Жарайсың!")
+                        audio.speak("Керемет жауап!")
                         onEvaluated(100)
                     } else {
                         audio.playTryAgain()
-                        audio.speak("Жақсы әрекет. Дұрыс жауабын бірге қарайық.")
-                        onEvaluated(55)
+                        audio.speak("Жақсы талпыныс. Дұрыс жауабын бірге көрейік.")
+                        onEvaluated(60)
                     }
                 },
             color = container,
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(20.dp),
             border = BorderStroke(2.dp, border),
+            shadowElevation = 2.dp
         ) {
             Text(
                 text = option,
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 17.dp),
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
                 color = AppText,
-                fontSize = 18.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
             )
@@ -360,20 +370,32 @@ private fun TapCountExercise(
     val correct = taps == round.correctTaps
 
     QuestionCard {
-        Text(round.emoji, fontSize = 72.sp)
+        Text(round.emoji, fontSize = 84.sp)
         Text(
             text = round.word,
             color = AppPurple,
-            fontSize = 31.sp,
+            fontSize = 36.sp,
             fontWeight = FontWeight.ExtraBold,
         )
         Text(
             text = "Буын санынша барабанды бас",
-            color = AppText.copy(alpha = 0.66f),
+            color = AppText.copy(alpha = 0.7f),
+            fontSize = 18.sp,
             textAlign = TextAlign.Center,
         )
     }
-    Spacer(modifier = Modifier.height(20.dp))
+    Spacer(modifier = Modifier.height(32.dp))
+    
+    val infiniteTransition = rememberInfiniteTransition(label = "drum")
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ), label = "scale"
+    )
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Center,
@@ -381,40 +403,43 @@ private fun TapCountExercise(
     ) {
         Surface(
             modifier = Modifier
-                .size(126.dp)
+                .size(140.dp)
+                .graphicsLayer(scaleX = scale, scaleY = scale)
                 .clip(CircleShape)
-                .clickable(enabled = enabled && !checked && taps < 6) {
+                .clickable(enabled = enabled && !checked && taps < 9) {
                     taps += 1
                     audio.playTryAgain()
                 },
             shape = CircleShape,
-            color = Color(0xFFFFD99E),
+            color = Color(0xFFFFE0B2),
             border = BorderStroke(4.dp, AppOrange),
+            shadowElevation = 6.dp
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Text("🥁", fontSize = 62.sp)
+                Text("🥁", fontSize = 72.sp)
             }
         }
-        Spacer(modifier = Modifier.width(24.dp))
+        Spacer(modifier = Modifier.width(32.dp))
         Text(
             text = "$taps",
             color = AppBlue,
-            fontSize = 52.sp,
+            fontSize = 64.sp,
             fontWeight = FontWeight.ExtraBold,
         )
     }
-    Spacer(modifier = Modifier.height(18.dp))
+    Spacer(modifier = Modifier.height(24.dp))
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         OutlinedButton(
             onClick = { taps = 0 },
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).height(56.dp),
             enabled = enabled && !checked && taps > 0,
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(18.dp),
+            border = BorderStroke(2.dp, AppBlue.copy(alpha = 0.5f))
         ) {
-            Text("Қайта сана")
+            Text("Қайта сана", fontWeight = FontWeight.Bold)
         }
         Button(
             onClick = {
@@ -424,15 +449,16 @@ private fun TapCountExercise(
                     onEvaluated(100)
                 } else {
                     audio.playTryAgain()
-                    onEvaluated(55)
+                    onEvaluated(60)
                 }
             },
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).height(56.dp),
             enabled = enabled && !checked && taps > 0,
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(18.dp),
             colors = ButtonDefaults.buttonColors(containerColor = AppBlue),
+            elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
         ) {
-            Text("Тексеру")
+            Text("Тексеру", fontWeight = FontWeight.ExtraBold)
         }
     }
     FeedbackCard(
@@ -459,40 +485,42 @@ private fun ArrangeWordsExercise(
     val correct = selectedWords == round.wordsInOrder
 
     QuestionCard {
-        Text("💬", fontSize = 58.sp)
+        Text("💬", fontSize = 64.sp)
         Text(
             text = if (selectedWords.isEmpty()) "Сөздерді ретімен таңда" else selectedWords.joinToString(" "),
-            modifier = Modifier.fillMaxWidth(),
-            color = if (selectedWords.isEmpty()) AppText.copy(alpha = 0.42f) else AppText,
-            fontSize = 21.sp,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            color = if (selectedWords.isEmpty()) AppText.copy(alpha = 0.4f) else AppText,
+            fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
-            lineHeight = 29.sp,
+            lineHeight = 30.sp,
         )
     }
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(24.dp))
 
-    shuffledIndices.filter { it !in selectedIndices }.forEach { index ->
-        WordOrderButton(
-            text = round.wordsInOrder[index],
-            enabled = enabled && !checked,
-            onClick = { selectedIndices = selectedIndices + index },
-        )
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        shuffledIndices.filter { it !in selectedIndices }.forEach { index ->
+            WordOrderButton(
+                text = round.wordsInOrder[index],
+                enabled = enabled && !checked,
+                onClick = { selectedIndices = selectedIndices + index },
+            )
+        }
     }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(top = 24.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         OutlinedButton(
             onClick = { selectedIndices = emptyList() },
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).height(56.dp),
             enabled = enabled && !checked && selectedIndices.isNotEmpty(),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(18.dp),
         ) {
-            Text("Тазалау")
+            Text("Тазалау", fontWeight = FontWeight.Bold)
         }
         Button(
             onClick = {
@@ -503,15 +531,15 @@ private fun ArrangeWordsExercise(
                     onEvaluated(100)
                 } else {
                     audio.playTryAgain()
-                    onEvaluated(55)
+                    onEvaluated(60)
                 }
             },
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).height(56.dp),
             enabled = enabled && !checked && selectedIndices.size == round.wordsInOrder.size,
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(18.dp),
             colors = ButtonDefaults.buttonColors(containerColor = AppBlue),
         ) {
-            Text("Тексеру")
+            Text("Тексеру", fontWeight = FontWeight.ExtraBold)
         }
     }
     FeedbackCard(
@@ -538,41 +566,42 @@ private fun StoryOrderExercise(
 
     QuestionCard {
         Text(
-            text = if (selectedIndices.isEmpty()) "1 → 2 → 3" else selectedIndices.mapIndexed { position, index ->
-                "${position + 1}. ${round.cardsInOrder[index].emoji}"
+            text = if (selectedIndices.isEmpty()) "1 → 2 → 3" else selectedIndices.mapIndexed { pos, idx ->
+                "${pos + 1}. ${round.cardsInOrder[idx].emoji}"
             }.joinToString("   "),
-            fontSize = 25.sp,
+            fontSize = 28.sp,
             fontWeight = FontWeight.ExtraBold,
             color = AppPurple,
             textAlign = TextAlign.Center,
         )
     }
-    Spacer(modifier = Modifier.height(14.dp))
+    Spacer(modifier = Modifier.height(20.dp))
 
     shuffledIndices.filter { it !in selectedIndices }.forEach { index ->
         val card = round.cardsInOrder[index]
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 6.dp)
-                .clip(RoundedCornerShape(18.dp))
+                .padding(vertical = 8.dp)
+                .clip(RoundedCornerShape(20.dp))
                 .clickable(enabled = enabled && !checked) {
                     selectedIndices = selectedIndices + index
                 },
             color = Color.White,
-            shape = RoundedCornerShape(18.dp),
-            border = BorderStroke(1.dp, Color(0xFFDCE5EC)),
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(1.dp, Color(0xFFEEEEEE)),
+            shadowElevation = 2.dp
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+                modifier = Modifier.padding(20.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(card.emoji, fontSize = 38.sp)
+                Text(card.emoji, fontSize = 42.sp)
                 Text(
                     text = card.text,
-                    modifier = Modifier.padding(start = 16.dp),
+                    modifier = Modifier.padding(start = 20.dp),
                     color = AppText,
-                    fontSize = 17.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -582,14 +611,14 @@ private fun StoryOrderExercise(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(top = 20.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         OutlinedButton(
             onClick = { selectedIndices = emptyList() },
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).height(56.dp),
             enabled = enabled && !checked && selectedIndices.isNotEmpty(),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(18.dp),
         ) {
             Text("Қайта реттеу")
         }
@@ -602,12 +631,12 @@ private fun StoryOrderExercise(
                     onEvaluated(100)
                 } else {
                     audio.playTryAgain()
-                    onEvaluated(55)
+                    onEvaluated(60)
                 }
             },
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).height(56.dp),
             enabled = enabled && !checked && selectedIndices.size == round.cardsInOrder.size,
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(18.dp),
             colors = ButtonDefaults.buttonColors(containerColor = AppBlue),
         ) {
             Text("Тексеру")
@@ -624,15 +653,24 @@ private fun StoryOrderExercise(
 @Composable
 private fun VoiceExercise(
     round: VoiceRound,
+    progress: ProgressRepository,
     audio: SpeechAudio,
+    repository: FirebaseRepository,
     enabled: Boolean,
     onEvaluated: (Int) -> Unit,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    
     var heardText by remember(round.id) { mutableStateOf("") }
     var listening by remember(round.id) { mutableStateOf(false) }
     var recognitionMessage by remember(round.id) { mutableStateOf("") }
     var evaluated by remember(round.id) { mutableStateOf(false) }
+    var attempts by remember(round.id) { mutableStateOf(0) }
+    var wordResults by remember(round.id) { mutableStateOf<List<WordResult>?>(null) }
+    var showRestDialog by remember(round.id) { mutableStateOf(false) }
+    var rmsLevel by remember { mutableStateOf(0f) }
+
     var hasPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
@@ -650,12 +688,15 @@ private fun VoiceExercise(
             recognitionMessage = ""
             listening = true
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, "kk-KZ")
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "kk-KZ")
-                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
-                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                // Ensure online mode for high accuracy in Kazakh
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)
+                // Increase silence timeouts
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L)
             }
             recognizer.startListening(intent)
         }
@@ -666,41 +707,78 @@ private fun VoiceExercise(
     ) { granted ->
         hasPermission = granted
         if (granted) startRecognition()
-        else recognitionMessage = "Микрофонға рұқсат берілмеді. Ересекпен бірге тексеруге болады."
+        else recognitionMessage = "Микрофонға рұқсат берілмеді."
     }
 
     DisposableEffect(recognizer, round.id) {
         recognizer?.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
                 listening = true
+                rmsLevel = 0f
                 recognitionMessage = "Тыңдап тұрмын…"
             }
-
-            override fun onBeginningOfSpeech() {
-                recognitionMessage = "Айта бер…"
+            override fun onBeginningOfSpeech() { recognitionMessage = "Айта бер…" }
+            override fun onRmsChanged(rmsdB: Float) {
+                rmsLevel = rmsdB
             }
-
-            override fun onRmsChanged(rmsdB: Float) = Unit
             override fun onBufferReceived(buffer: ByteArray?) = Unit
             override fun onEndOfSpeech() {
                 listening = false
+                rmsLevel = 0f
                 recognitionMessage = "Тексеріп жатырмын…"
             }
-
             override fun onError(error: Int) {
                 listening = false
-                recognitionMessage = "Дауыс анық естілмеді. Қайта айтып көр немесе ересекпен бірге тексер."
+                recognitionMessage = "Дауыс анық естілмеді. Қайта айтып көр."
             }
-
             override fun onResults(results: Bundle?) {
                 listening = false
-                heardText = results
-                    ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    ?.firstOrNull()
-                    .orEmpty()
-                recognitionMessage = if (heardText.isBlank()) "Сөз естілмеді." else "Құрылғы естігені: «$heardText»"
-            }
+                val transcription = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
+                heardText = transcription
+                
+                if (transcription.isNotBlank()) {
+                    val evaluation = PronunciationEvaluator.evaluate(round.modelText, transcription)
+                    wordResults = evaluation
+                    attempts++
+                    
+                    if (PronunciationEvaluator.isOverallSuccess(evaluation)) {
+                        recognitionMessage = "Керемет! Өте жақсы айттың."
+                        audio.playCorrect()
+                        evaluated = true
+                        
+                        // Mark target words as learned if the pronunciation was good
+                        evaluation.forEach { res ->
+                            if (res.status == WordStatus.CORRECT) {
+                                // Find matching vocabulary word ID if exists
+                                val vocabWord = Curriculum.levels.flatMap { it.vocabulary }
+                                    .find { it.word.lowercase() == res.word.lowercase() }
+                                if (vocabWord != null) {
+                                    progress.markWordAsLearned(vocabWord.id)
+                                    scope.launch {
+                                        repository.saveLearnedWord(vocabWord.id)
+                                    }
+                                }
+                            }
+                        }
 
+                        onEvaluated(100)
+                    } else {
+                        recognitionMessage = "Жақсы талпыныс. Кейбір сөздерді түзетіп көрейік."
+                        audio.playTryAgain()
+                        audio.speak(round.modelText, slower = true)
+                        
+                        evaluation.filter { it.status != WordStatus.CORRECT }.forEach {
+                            progress.logPronunciationFail(it.word)
+                        }
+
+                        if (attempts >= 3) {
+                            showRestDialog = true
+                        }
+                    }
+                } else {
+                    recognitionMessage = "Сөз естілмеді. Қайта айтып көр."
+                }
+            }
             override fun onPartialResults(partialResults: Bundle?) = Unit
             override fun onEvent(eventType: Int, params: Bundle?) = Unit
         })
@@ -711,116 +789,166 @@ private fun VoiceExercise(
     }
 
     QuestionCard {
-        Text(round.picture, fontSize = if (round.picture.length <= 4) 76.sp else 48.sp)
-        Text(
-            text = round.modelText,
-            modifier = Modifier.fillMaxWidth(),
-            color = AppGreen,
-            fontSize = if (round.modelText.length < 24) 28.sp else 21.sp,
-            fontWeight = FontWeight.ExtraBold,
-            textAlign = TextAlign.Center,
-            lineHeight = 30.sp,
-        )
+        Text(round.picture, fontSize = 84.sp)
+        
+        if (wordResults != null) {
+            Text(
+                text = buildAnnotatedString {
+                    wordResults!!.forEachIndexed { wordIdx, wordRes ->
+                        wordRes.charResults.forEach { charRes ->
+                            val color = when (charRes.status) {
+                                CharStatus.CORRECT -> AppGreen
+                                CharStatus.WRONG -> if (wordRes.status == WordStatus.OMITTED) Color.Gray else Color.Red
+                            }
+                            val decoration = when {
+                                wordRes.status == WordStatus.OMITTED -> TextDecoration.LineThrough
+                                charRes.status == CharStatus.WRONG -> TextDecoration.Underline
+                                else -> TextDecoration.None
+                            }
+                            
+                            withStyle(style = SpanStyle(color = color, textDecoration = decoration)) {
+                                append(charRes.char)
+                            }
+                        }
+                        if (wordIdx < wordResults!!.size - 1) append(" ")
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                fontSize = if (round.modelText.length < 20) 32.sp else 24.sp,
+                fontWeight = FontWeight.ExtraBold,
+                textAlign = TextAlign.Center,
+                lineHeight = 36.sp,
+            )
+        } else {
+            Text(
+                text = round.modelText,
+                modifier = Modifier.fillMaxWidth(),
+                color = AppGreen,
+                fontSize = if (round.modelText.length < 20) 32.sp else 24.sp,
+                fontWeight = FontWeight.ExtraBold,
+                textAlign = TextAlign.Center,
+                lineHeight = 36.sp,
+            )
+        }
     }
-    Spacer(modifier = Modifier.height(18.dp))
+    Spacer(modifier = Modifier.height(24.dp))
     Button(
         onClick = { audio.speak(round.modelText, slower = true) },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().height(56.dp),
         enabled = audio.ready,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = ButtonDefaults.buttonColors(containerColor = AppBlue),
     ) {
-        Text("🔊  Үлгіні қайта тыңдау", fontWeight = FontWeight.Bold)
+        Text("🔊  Үлгіні тыңдау", fontWeight = FontWeight.Bold, fontSize = 16.sp)
     }
-    Spacer(modifier = Modifier.height(10.dp))
-    OutlinedButton(
-        onClick = {
-            if (hasPermission) startRecognition() else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-        },
-        modifier = Modifier.fillMaxWidth(),
-        enabled = enabled && !evaluated && recognitionAvailable && !listening,
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(2.dp, AppPurple),
-    ) {
-        Text(if (listening) "🎙️ Тыңдап тұрмын…" else "🎙️ Менің дауысымды тыңда", color = AppPurple)
-    }
-
-    if (!recognitionAvailable) {
-        Text(
-            text = "Бұл құрылғыда дауысты тану жоқ. Сөзді ересекпен бірге айтып көр.",
-            modifier = Modifier.padding(top = 10.dp),
-            color = AppText.copy(alpha = 0.65f),
-            fontSize = 13.sp,
-            textAlign = TextAlign.Center,
+    Spacer(modifier = Modifier.height(12.dp))
+    
+    // Pulsing Mic for Child Feedback
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth().height(80.dp)) {
+        val scale by animateFloatAsState(
+            targetValue = if (listening) (1f + (rmsLevel.coerceIn(0f, 10f) / 15f)) else 1f,
+            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+            label = "micScale"
         )
-    }
-    if (recognitionMessage.isNotBlank()) {
-        Text(
-            text = recognitionMessage,
+        
+        Surface(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp),
-            color = AppText.copy(alpha = 0.72f),
-            textAlign = TextAlign.Center,
-        )
-    }
-
-    if (heardText.isNotBlank() && !evaluated) {
-        val speechScore = scoreSpokenPhrase(round.modelText, heardText)
-        Button(
-            onClick = {
-                evaluated = true
-                audio.playCorrect()
-                onEvaluated(if (speechScore >= 60) 100 else 70)
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 10.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = AppGreen),
+                .size(64.dp)
+                .graphicsLayer(scaleX = scale, scaleY = scale)
+                .clip(CircleShape)
+                .clickable(
+                    enabled = enabled && !evaluated && recognitionAvailable && !listening,
+                    onClick = { if (hasPermission) startRecognition() else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) }
+                ),
+            color = if (listening) AppGreen else AppPurple,
+            shadowElevation = 6.dp
         ) {
-            Text("Жалғастыру • ұқсастық $speechScore%")
+            Box(contentAlignment = Alignment.Center) {
+                Text(if (listening) "🎤" else "🎙️", fontSize = 32.sp)
+            }
         }
     }
 
+    Text(
+        text = if (listening) "Сөйле…" else "Микрофонды бас та, айтып көр (${attempts}/3)",
+        modifier = Modifier.fillMaxWidth(),
+        color = if (listening) AppGreen else AppPurple,
+        textAlign = TextAlign.Center,
+        fontWeight = FontWeight.Bold,
+        fontSize = 14.sp
+    )
+
+    if (recognitionMessage.isNotBlank()) {
+        Text(
+            text = recognitionMessage,
+            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+            color = if (evaluated) AppGreen else AppText.copy(alpha = 0.8f),
+            textAlign = TextAlign.Center,
+            fontWeight = FontWeight.Medium
+        )
+    }
+
     if (!evaluated) {
-        OutlinedButton(
+        TextButton(
             onClick = {
                 evaluated = true
                 audio.playCorrect()
                 onEvaluated(85)
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 10.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
             enabled = enabled,
-            shape = RoundedCornerShape(16.dp),
         ) {
-            Text("👪  Ересекпен бірге айтып көрдім")
+            Text("👪  Ересекпен бірге айттым", color = AppText.copy(alpha = 0.6f))
         }
     }
 
     FeedbackCard(
         visible = evaluated,
         success = true,
-        successText = "Айтып көруге батылдық жасадың — жарайсың!",
+        successText = "Жарайсың! Сен нағыз батырсың! 🐎",
         supportText = "",
     )
+    
+    if (showRestDialog) {
+        AlertDialog(
+            onDismissRequest = { showRestDialog = false },
+            title = { Text("Кішкене демалайық па?") },
+            text = { Text("Бұл сөз сәл қиындау болды. Қазірше өткізіп жіберіп, кейін қайта көруге болады.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRestDialog = false
+                        evaluated = true
+                        onEvaluated(60) // Partial points for trying
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AppOrange)
+                ) {
+                    Text("Өткізіп жіберу")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestDialog = false }) {
+                    Text("Тағы көремін")
+                }
+            }
+        )
+    }
+
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 12.dp),
-        color = Color(0xFFF3EDFF),
-        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+        color = AppBlue.copy(alpha = 0.08f),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, AppBlue.copy(alpha = 0.2f))
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Text("Ересекке кеңес", color = AppPurple, fontWeight = FontWeight.ExtraBold)
+        Column(modifier = Modifier.padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("🚀 Күнделікті мақсат", color = AppBlue, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
             Text(
-                text = round.parentPrompt,
-                modifier = Modifier.padding(top = 5.dp),
-                color = AppText.copy(alpha = 0.72f),
-                fontSize = 13.sp,
-                lineHeight = 19.sp,
+                text = round.childEncouragement,
+                modifier = Modifier.padding(top = 8.dp),
+                color = AppText,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+                lineHeight = 20.sp,
             )
         }
     }
@@ -830,17 +958,15 @@ private fun VoiceExercise(
 private fun QuestionCard(content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
-        border = BorderStroke(1.dp, Color(0xFFE8EEF2)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+        border = BorderStroke(1.dp, AppBlue.copy(alpha = 0.1f)),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 24.dp),
+            modifier = Modifier.fillMaxWidth().padding(28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
             content = content,
         )
     }
@@ -851,18 +977,18 @@ private fun WordOrderButton(text: String, enabled: Boolean, onClick: () -> Unit)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 5.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(18.dp))
             .clickable(enabled = enabled, onClick = onClick),
-        color = Color(0xFFF2F8FF),
-        shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(1.dp, AppBlue.copy(alpha = 0.35f)),
+        color = Color(0xFFF5F9FF),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(2.dp, AppBlue.copy(alpha = 0.3f)),
+        shadowElevation = 1.dp
     ) {
         Text(
             text = text,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
             color = AppBlue,
-            fontSize = 17.sp,
+            fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
         )
@@ -878,18 +1004,18 @@ private fun FeedbackCard(
 ) {
     AnimatedVisibility(visible = visible) {
         Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp),
-            color = if (success) Color(0xFFDFF7DB) else Color(0xFFFFEEDB),
-            shape = RoundedCornerShape(18.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+            color = if (success) Color(0xFFE8F5E9) else Color(0xFFFFF3E0),
+            shape = RoundedCornerShape(20.dp),
+            shadowElevation = 2.dp
         ) {
             Text(
                 text = if (success) "🌟  $successText" else "💛  $supportText",
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(20.dp),
                 color = AppText,
-                fontWeight = FontWeight.SemiBold,
-                lineHeight = 21.sp,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                lineHeight = 24.sp,
             )
         }
     }
@@ -897,39 +1023,36 @@ private fun FeedbackCard(
 
 @Composable
 private fun ListenButton(enabled: Boolean, onClick: () -> Unit) {
-    OutlinedButton(
+    Button(
         onClick = onClick,
         enabled = enabled,
         shape = CircleShape,
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-        border = BorderStroke(1.dp, AppBlue.copy(alpha = 0.45f)),
+        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = AppBlue),
+        border = BorderStroke(2.dp, AppBlue),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
     ) {
-        Text(if (enabled) "🔊 Тыңдау" else "Дауыс дайындалуда…", color = AppBlue, fontSize = 13.sp)
+        Text(if (enabled) "🔊 Тыңдау" else "Дайындалуда…", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
     }
 }
 
 @Composable
 private fun GameHeader(title: String, emoji: String, onBack: () -> Unit) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(62.dp)
-            .padding(horizontal = 12.dp),
+        modifier = Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BackButton(onClick = onBack)
         Text(
             text = "$emoji  $title",
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 8.dp),
+            modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
             color = AppText,
-            fontSize = 17.sp,
+            fontSize = 20.sp,
             fontWeight = FontWeight.ExtraBold,
             textAlign = TextAlign.Center,
             maxLines = 1,
         )
-        Spacer(modifier = Modifier.size(42.dp))
+        Spacer(modifier = Modifier.size(48.dp))
     }
 }
 
@@ -948,79 +1071,131 @@ private fun GameResultScreen(
         else -> 1
     }
     val message = when (stars) {
-        3 -> "Тамаша жұмыс! Сен мұқият тыңдап, батыл жауап бердің."
-        2 -> "Өте жақсы! Қайталаған сайын сөздер анық әрі сенімді болады."
-        else -> "Жарайсың! Ең маңыздысы — байқап көру және бірге сөйлесу."
+        3 -> "Керемет жетістік! Сен нағыз білім шыңын бағындырдың."
+        2 -> "Өте жақсы нәтиже! Қайталаған сайын сөздерің анықтала түседі."
+        else -> "Жарайсың! Байқап көрудің өзі — үлкен қадам. Алға!"
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFFE8F8FF), Color(0xFFFFF7E9)),
-                ),
+                Brush.radialGradient(
+                    colors = listOf(Color(0xFFFFFAF0), Color(0xFFFFF1CC)),
+                )
             )
-            .statusBarsPadding()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
     ) {
-        Text("${"⭐".repeat(stars)}${"☆".repeat(3 - stars)}", fontSize = 52.sp)
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Ойын аяқталды!",
-            style = MaterialTheme.typography.headlineMedium,
-            color = AppBlue,
-            textAlign = TextAlign.Center,
+        KazakhPatternBackground(
+            modifier = Modifier.fillMaxSize(),
+            color = AppGold.copy(alpha = 0.12f),
+            strokeWidth = 4f
         )
-        Text(
-            text = activity.title,
-            modifier = Modifier.padding(top = 8.dp),
-            color = AppText,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            text = "$score%",
-            modifier = Modifier.padding(top = 16.dp),
-            color = AppGreen,
-            fontSize = 38.sp,
-            fontWeight = FontWeight.ExtraBold,
-        )
-        Text(
-            text = message,
-            modifier = Modifier.padding(top = 12.dp, bottom = 26.dp),
-            color = AppText.copy(alpha = 0.72f),
-            textAlign = TextAlign.Center,
-            lineHeight = 22.sp,
-        )
-        Button(
-            onClick = if (hasNext) onNext else onExit,
+        
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = AppGreen),
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
-            Text(if (hasNext) "Келесі ойын →" else "Картаға қайту", fontWeight = FontWeight.ExtraBold)
-        }
-        OutlinedButton(
-            onClick = onRepeat,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 10.dp),
-            shape = RoundedCornerShape(16.dp),
-        ) {
-            Text("↻ Қайта ойнау")
-        }
-        OutlinedButton(
-            onClick = onExit,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            border = BorderStroke(0.dp, Color.Transparent),
-        ) {
-            Text("Деңгейге қайту", color = AppText.copy(alpha = 0.62f))
+            Surface(
+                modifier = Modifier.size(160.dp),
+                shape = CircleShape,
+                color = Color.White,
+                shadowElevation = 12.dp,
+                border = BorderStroke(6.dp, AppGold)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(if (stars == 3) "🏆" else "🌟", fontSize = 84.sp)
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            Text(
+                text = if (stars == 3) "КЕРЕМЕТ ЖЕҢІС!" else "ЖАРАЙСЫҢ!",
+                style = MaterialTheme.typography.headlineLarge,
+                color = AppText,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 2.sp
+            )
+            
+            Text(
+                text = activity.title,
+                modifier = Modifier.padding(top = 8.dp),
+                color = AppBlue,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            
+            Row(
+                modifier = Modifier.padding(vertical = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                repeat(3) { i ->
+                    Text(
+                        text = if (i < stars) "⭐" else "☆",
+                        fontSize = 56.sp,
+                        color = AppGold
+                    )
+                }
+            }
+
+            Surface(
+                color = AppGreen.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(2.dp, AppGreen.copy(alpha = 0.3f))
+            ) {
+                Text(
+                    text = "Дәлдік: $score%",
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                    color = AppGreen,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Black,
+                )
+            }
+
+            Text(
+                text = message,
+                modifier = Modifier.padding(top = 28.dp, bottom = 40.dp),
+                color = AppText.copy(alpha = 0.8f),
+                textAlign = TextAlign.Center,
+                fontSize = 18.sp,
+                lineHeight = 26.sp,
+                fontWeight = FontWeight.Medium
+            )
+
+            Button(
+                onClick = if (hasNext) onNext else onExit,
+                modifier = Modifier.fillMaxWidth().height(68.dp).shadow(12.dp, RoundedCornerShape(24.dp)),
+                shape = RoundedCornerShape(24.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AppGreen),
+            ) {
+                Text(
+                    text = if (hasNext) "Келесі кезеңге →" else "Картаға оралу",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 20.sp
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            OutlinedButton(
+                onClick = onRepeat,
+                modifier = Modifier.fillMaxWidth().height(60.dp),
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(2.dp, AppBlue)
+            ) {
+                Text("↻ Қайта ойнау", color = AppBlue, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            }
+            
+            TextButton(
+                onClick = onExit,
+                modifier = Modifier.padding(top = 16.dp)
+            ) {
+                Text("Бас мәзірге қайту", color = AppText.copy(alpha = 0.5f), fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
