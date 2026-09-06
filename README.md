@@ -20,6 +20,10 @@ The course contains 6 sequential levels, 18 activities, and 80 rounds. A new lev
 ## Child experience
 
 - Bundled native Kazakh speech for every course phrase, with offline playback and a replay button on every round
+- Face Map 2.0 articulation mirror with target lip guides, deviation colors, mouth metrics, two-second pose hold, and sound-specific exercises; camera frames are not stored or uploaded
+- Express speech assessment with four Kazakh prompts, Face Map exercises, and a clear non-medical speech profile
+- Color-coded sound map that links assessment results to matching course words and exercises
+- Personalized daily route that prioritizes sounds, words, games, and a reassessment date from the latest assessment
 - Five exercise formats: listen-and-choose, syllable tapping, word ordering, story ordering, and voice practice
 - Optional Kazakh speech recognition with an adult-confirmation fallback; microphone access is not required
 - Supportive feedback that shows the correct model without punishing mistakes
@@ -51,11 +55,13 @@ Parent accounts are managed by Firebase Authentication. The child name, age, and
 
 The app requires Android 7.0 (API 24) or newer. All current course prompts are bundled in the APK and work without internet access or an installed Android text-to-speech voice.
 
+For presentations and offline evaluation, the sign-in screen includes a clearly labelled local demo mode. It unlocks the learning path for navigation but does not fabricate progress or write guest data to Firebase.
+
 Firebase Authentication features require an internet connection. In the Firebase console, enable the **Email/Password** sign-in provider and configure the verification and password-reset email templates for the production domain.
 
 ## Bundled Kazakh speech
 
-The 122 normalized course phrases are generated with the high-quality `kk_KZ-issai-high` Piper voice trained on the ISSAI KazakhTTS/KazakhTTS2 datasets. The bundled voice uses speaker `ISSAI_KazakhTTS_F1_Raya`. Dataset attribution and the CC BY 4.0 license link are included in `app/src/main/assets/speech/ATTRIBUTION.txt`.
+The 127 normalized course and Face Map phrases are generated with the high-quality `kk_KZ-issai-high` Piper voice trained on the ISSAI KazakhTTS/KazakhTTS2 datasets. The bundled voice uses speaker `ISSAI_KazakhTTS_F1_Raya`. Dataset attribution and the CC BY 4.0 license link are included in `app/src/main/assets/speech/ATTRIBUTION.txt`.
 
 ## Build and verify
 

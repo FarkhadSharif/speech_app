@@ -155,6 +155,23 @@ fun AuthScreen(viewModel: AuthViewModel) {
                     textAlign = TextAlign.Center,
                 )
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = viewModel::enterDemoMode,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    "✨ Презентациялық демо / Демо без аккаунта",
+                    textAlign = TextAlign.Center,
+                )
+            }
+            Text(
+                text = "Демо прогресі тек осы құрылғыда сақталады / Демо-прогресс хранится только на устройстве",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 

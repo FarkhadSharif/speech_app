@@ -54,7 +54,7 @@ fun GameSessionScreen(
     activity: GameActivity,
     progress: ProgressRepository,
     audio: SpeechAudio,
-    repository: FirebaseRepository,
+    repository: FirebaseRepository?,
     onBack: () -> Unit,
     onSaveResult: (Int) -> Unit,
     onNextActivity: () -> Unit,
@@ -655,7 +655,7 @@ private fun VoiceExercise(
     round: VoiceRound,
     progress: ProgressRepository,
     audio: SpeechAudio,
-    repository: FirebaseRepository,
+    repository: FirebaseRepository?,
     enabled: Boolean,
     onEvaluated: (Int) -> Unit,
 ) {
@@ -755,7 +755,7 @@ private fun VoiceExercise(
                                 if (vocabWord != null) {
                                     progress.markWordAsLearned(vocabWord.id)
                                     scope.launch {
-                                        repository.saveLearnedWord(vocabWord.id)
+                                        repository?.saveLearnedWord(vocabWord.id)
                                     }
                                 }
                             }

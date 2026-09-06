@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.farkhad.speechapp.audio.SpeechAudio
 import com.farkhad.speechapp.audio.rememberSpeechAudio
+import com.farkhad.speechapp.assessment.PersonalizedRouteEngine
 import com.farkhad.speechapp.data.FirebaseRepository
 import com.farkhad.speechapp.data.ProgressRepository
 import com.farkhad.speechapp.model.Curriculum
@@ -85,6 +86,10 @@ private enum class AppScreen {
     Level,
     Game,
     WordLibrary,
+    Assessment,
+    SoundMap,
+    PersonalizedRoute,
+    FaceMap,
     ParentDashboard,
     Statistics,
     ParentGuide,
@@ -94,6 +99,7 @@ private enum class AppScreen {
 @Composable
 fun SpeechApp(
     userId: String,
+    isDemoMode: Boolean = false,
     onSignOut: () -> Unit = {},
     onSignOutEverywhere: () -> Unit = {},
 ) {
@@ -112,17 +118,24 @@ fun SpeechApp(
     var showParentalGate by remember { mutableStateOf(false) }
     var parentalGateTarget by remember { mutableStateOf<AppScreen?>(null) }
     var correctPin by remember { mutableStateOf("1234") }
-    val repository = remember { FirebaseRepository() }
+    // Presentation demo is intentionally local: do not initialize Firebase on
+    // its hot path. Besides avoiding unnecessary network work, this prevents a
+    // slow Play Services startup from delaying the first screen transition.
+    val repository = remember(isDemoMode) {
+        if (isDemoMode) null else FirebaseRepository()
+    }
 
-    LaunchedEffect(userId) {
-        repository.getChildInfo().onSuccess { profile ->
-            if (profile != null) {
-                correctPin = profile.parentPin
+    LaunchedEffect(userId, isDemoMode) {
+        if (!isDemoMode) {
+            repository?.getChildInfo()?.onSuccess { profile ->
+                if (profile != null) {
+                    correctPin = profile.parentPin
+                }
             }
-        }
-        // Sync learned words from Firebase
-        repository.getLearnedWords().onSuccess { wordIds ->
-            progress.updateLearnedWords(wordIds)
+            // Sync learned words from Firebase
+            repository?.getLearnedWords()?.onSuccess { wordIds ->
+                progress.updateLearnedWords(wordIds)
+            }
         }
     }
 
@@ -146,6 +159,7 @@ fun SpeechApp(
                 onParent = { navigate(AppScreen.ParentDashboard) },
                 onSignOut = onSignOut,
                 onSignOutEverywhere = onSignOutEverywhere,
+                isDemoMode = isDemoMode,
             )
 
             AppScreen.ChildHome -> ChildHomeScreen(
@@ -157,6 +171,11 @@ fun SpeechApp(
                     navigate(AppScreen.Level)
                 },
                 onOpenWords = { navigate(AppScreen.WordLibrary) },
+                onOpenAssessment = { navigate(AppScreen.Assessment) },
+                onOpenSoundMap = { navigate(AppScreen.SoundMap) },
+                onOpenTraining = { navigate(AppScreen.PersonalizedRoute) },
+                onOpenFaceMap = { navigate(AppScreen.FaceMap) },
+                isDemoMode = isDemoMode,
                 onBack = { requestParentalGate(AppScreen.Role) }
             )
 
@@ -177,8 +196,8 @@ fun SpeechApp(
             AppScreen.Game -> {
                 val activity = Curriculum.activity(selectedActivityId)
                 val next = Curriculum.nextActivity(activity.id)
-                val nextIsUnlocked = next != null && progress.isLevelUnlocked(
-                    Curriculum.levelForActivity(next.id).id,
+                val nextIsUnlocked = next != null && (
+                    isDemoMode || progress.isLevelUnlocked(Curriculum.levelForActivity(next.id).id)
                 )
                 GameSessionScreen(
                     activity = activity,
@@ -195,7 +214,11 @@ fun SpeechApp(
                         if (completedThisSession >= 3) showBreakReminder = true
                     },
                     onNextActivity = {
-                        if (next == null || !progress.isLevelUnlocked(Curriculum.levelForActivity(next.id).id)) {
+                        if (next == null || (
+                                !isDemoMode &&
+                                    !progress.isLevelUnlocked(Curriculum.levelForActivity(next.id).id)
+                            )
+                        ) {
                             navigate(AppScreen.ChildHome)
                         } else {
                             selectedActivityId = next.id
@@ -209,6 +232,43 @@ fun SpeechApp(
 
             AppScreen.WordLibrary -> WordLibraryScreen(
                 progress = progress,
+                audio = audio,
+                onBack = { navigate(AppScreen.ChildHome) },
+            )
+
+            AppScreen.Assessment -> ExpressAssessmentScreen(
+                audio = audio,
+                progress = progress,
+                onBack = { navigate(AppScreen.ChildHome) },
+            )
+
+            AppScreen.SoundMap -> SoundMapScreen(
+                progress = progress,
+                progressRevision = progressRevision,
+                audio = audio,
+                onBack = { navigate(AppScreen.ChildHome) },
+                onStartAssessment = { navigate(AppScreen.Assessment) },
+                onOpenLevel = { levelId ->
+                    selectedLevelId = levelId
+                    navigate(AppScreen.Level)
+                },
+            )
+
+            AppScreen.PersonalizedRoute -> PersonalizedRouteScreen(
+                progress = progress,
+                progressRevision = progressRevision,
+                audio = audio,
+                onBack = { navigate(AppScreen.ChildHome) },
+                onStartAssessment = { navigate(AppScreen.Assessment) },
+                onOpenSoundMap = { navigate(AppScreen.SoundMap) },
+                onOpenActivity = { activity ->
+                    selectedActivityId = activity.id
+                    selectedLevelId = Curriculum.levelForActivity(activity.id).id
+                    navigate(AppScreen.Game)
+                },
+            )
+
+            AppScreen.FaceMap -> FaceMapScreen(
                 audio = audio,
                 onBack = { navigate(AppScreen.ChildHome) },
             )
@@ -238,6 +298,8 @@ fun SpeechApp(
             )
 
             AppScreen.ChildInfo -> ChildInfoScreen(
+                repository = repository,
+                isDemoMode = isDemoMode,
                 onBack = { navigate(AppScreen.ParentDashboard) },
             )
         }
@@ -300,6 +362,7 @@ private fun RoleSelectionScreen(
     onParent: () -> Unit,
     onSignOut: () -> Unit,
     onSignOutEverywhere: () -> Unit,
+    isDemoMode: Boolean,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         NetworkImageBackground(
@@ -319,18 +382,20 @@ private fun RoleSelectionScreen(
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f)),
             ) {
-                Text("Шығу / Выйти")
+                Text(if (isDemoMode) "Демодан шығу" else "Шығу / Выйти")
             }
-            TextButton(
-                onClick = onSignOutEverywhere,
-                modifier = Modifier.align(Alignment.End),
-                colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
-            ) {
-                Text(
-                    text = "Барлық құрылғылардан\nНа всех устройствах",
-                    fontSize = 11.sp,
-                    textAlign = TextAlign.End,
-                )
+            if (!isDemoMode) {
+                TextButton(
+                    onClick = onSignOutEverywhere,
+                    modifier = Modifier.align(Alignment.End),
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
+                ) {
+                    Text(
+                        text = "Барлық құрылғылардан\nНа всех устройствах",
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.End,
+                    )
+                }
             }
         }
 
@@ -422,9 +487,17 @@ private fun ChildHomeScreen(
     audio: SpeechAudio,
     onOpenLevel: (Int) -> Unit,
     onOpenWords: () -> Unit,
+    onOpenAssessment: () -> Unit,
+    onOpenSoundMap: () -> Unit,
+    onOpenTraining: () -> Unit,
+    onOpenFaceMap: () -> Unit,
+    isDemoMode: Boolean,
     onBack: () -> Unit,
 ) {
     @Suppress("UNUSED_VARIABLE") val observeRevision = progressRevision
+    val trainingRoute = remember(progressRevision) {
+        PersonalizedRouteEngine.build(progress.assessedSoundScores)
+    }
     
     Box(modifier = Modifier.fillMaxSize().background(AppBackground)) {
         NetworkImageBackground(
@@ -449,23 +522,178 @@ private fun ChildHomeScreen(
                 LevelRouteMap(
                     levels = Curriculum.levels,
                     progress = progress,
+                    unlockAll = isDemoMode,
                     onOpenLevel = onOpenLevel
                 )
                 
-                Surface(
+                Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(bottom = 24.dp)
                         .padding(horizontal = 24.dp)
-                        .fillMaxWidth()
-                        .height(64.dp)
-                        .clip(RoundedCornerShape(32.dp))
-                        .clickable(onClick = onOpenWords),
-                    color = AppGreen,
-                    shadowElevation = 8.dp
+                        .fillMaxWidth(),
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text("🔊 Сөздер Кітапханасы", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(88.dp)
+                            .clip(RoundedCornerShape(24.dp))
+                            .clickable(onClick = onOpenTraining),
+                        color = Color(0xFF3953D7),
+                        shadowElevation = 12.dp,
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 18.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("🧭", fontSize = 36.sp)
+                            Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
+                                Text(
+                                    "Твоя тренировка сегодня",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 17.sp,
+                                )
+                                Text(
+                                    if (trainingRoute.needsAssessment) {
+                                        "Алдымен экспресс-бағалаудан өт"
+                                    } else {
+                                        "Дыбыстар: ${trainingRoute.focusSounds.joinToString(" • ") { it.uppercase() }}  ·  ${trainingRoute.activities.size} ойын"
+                                    },
+                                    color = Color.White.copy(alpha = 0.80f),
+                                    fontSize = 11.sp,
+                                )
+                            }
+                            Surface(color = AppOrange, shape = RoundedCornerShape(50)) {
+                                Text(
+                                    "СТАРТ",
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 9.sp,
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(78.dp)
+                            .clip(RoundedCornerShape(24.dp))
+                            .clickable(onClick = onOpenAssessment),
+                        color = AppBlue,
+                        shadowElevation = 12.dp,
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 18.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("🎙️", fontSize = 34.sp)
+                            Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
+                                Text(
+                                    "Сөйлеуді тексеру",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 18.sp,
+                                )
+                                Text(
+                                    "Экспресс-оценка речи + Face Map",
+                                    color = Color.White.copy(alpha = 0.82f),
+                                    fontSize = 11.sp,
+                                )
+                            }
+                            Surface(color = AppOrange, shape = RoundedCornerShape(50)) {
+                                Text(
+                                    "60 сек",
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 10.sp,
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(72.dp)
+                            .clip(RoundedCornerShape(24.dp))
+                            .clickable(onClick = onOpenFaceMap),
+                        color = AppPurple,
+                        shadowElevation = 10.dp,
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 18.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("✨", fontSize = 30.sp)
+                            Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
+                                Text(
+                                    "Face Map",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 18.sp,
+                                )
+                                Text(
+                                    "Жаңа артикуляциялық айна",
+                                    color = Color.White.copy(alpha = 0.78f),
+                                    fontSize = 11.sp,
+                                )
+                            }
+                            Surface(color = AppOrange, shape = RoundedCornerShape(50)) {
+                                Text(
+                                    "NEW",
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 10.sp,
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(58.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .clickable(onClick = onOpenSoundMap),
+                            color = AppOrange,
+                            shadowElevation = 8.dp,
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    "🎯 Дыбыстар",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 14.sp,
+                                )
+                            }
+                        }
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(58.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .clickable(onClick = onOpenWords),
+                            color = AppGreen,
+                            shadowElevation = 8.dp,
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    "🔊 Сөздер",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 14.sp,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -477,6 +705,7 @@ private fun ChildHomeScreen(
 private fun LevelRouteMap(
     levels: List<CurriculumLevel>,
     progress: ProgressRepository,
+    unlockAll: Boolean,
     onOpenLevel: (Int) -> Unit
 ) {
     val scrollState = rememberScrollState()
@@ -489,7 +718,7 @@ private fun LevelRouteMap(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         levels.reversed().forEachIndexed { index, level ->
-            val unlocked = progress.isLevelUnlocked(level.id)
+            val unlocked = unlockAll || progress.isLevelUnlocked(level.id)
             val levelProgress = progress.levelProgress(level)
             val stars = progress.levelStars(level)
             
@@ -669,7 +898,7 @@ private fun LevelHubScreen(
     progress: ProgressRepository,
     progressRevision: Int,
     audio: SpeechAudio,
-    repository: FirebaseRepository,
+    repository: FirebaseRepository?,
     scope: kotlinx.coroutines.CoroutineScope,
     onBack: () -> Unit,
     onOpenActivity: (GameActivity) -> Unit,
@@ -758,7 +987,7 @@ private fun LevelHubScreen(
                             onLearn = { 
                                 progress.markWordAsLearned(word.id)
                                 scope.launch {
-                                    repository.saveLearnedWord(word.id)
+                                    repository?.saveLearnedWord(word.id)
                                 }
                             }
                         )
@@ -1721,24 +1950,25 @@ private fun levelGradient(levelId: Int): List<Color> = when (levelId) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ChildInfoScreen(
+    repository: FirebaseRepository?,
+    isDemoMode: Boolean,
     onBack: () -> Unit,
 ) {
-    val repository = remember { FirebaseRepository() }
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
     var age by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(true) }
+    var isLoading by remember { mutableStateOf(repository != null) }
     var isSaving by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(Unit) {
-        repository.getChildInfo().onSuccess { profile ->
+    LaunchedEffect(repository) {
+        repository?.getChildInfo()?.onSuccess { profile ->
             if (profile != null) {
                 name = profile.name
                 age = profile.age
             }
             isLoading = false
-        }.onFailure {
+        }?.onFailure {
             isLoading = false
             message = "Деректерді жүктеу қатесі"
         }
@@ -1765,7 +1995,11 @@ private fun ChildInfoScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    "Мұнда баланың есімі мен жасын өзгерте аласыз. Ата-ана PIN-коды бұл нұсқада бұлтқа сақталмайды.",
+                    if (isDemoMode) {
+                        "Демо режимінде бұл бөлім тек көрсетіледі. Деректер Firebase-ке жазылмайды."
+                    } else {
+                        "Мұнда баланың есімі мен жасын өзгерте аласыз. Ата-ана PIN-коды бұл нұсқада бұлтқа сақталмайды."
+                    },
                     color = AppText.copy(alpha = 0.6f),
                     fontSize = 14.sp,
                     textAlign = TextAlign.Center,
@@ -1806,12 +2040,12 @@ private fun ChildInfoScreen(
                         scope.launch {
                             isSaving = true
                             message = null
-                            repository.updateChildInfo(name, age)
-                                .onSuccess {
+                            repository?.updateChildInfo(name, age)
+                                ?.onSuccess {
                                     message = "Мәліметтер сақталды"
                                     isSaving = false
                                 }
-                                .onFailure {
+                                ?.onFailure {
                                     message = "Сақтау қатесі"
                                     isSaving = false
                                 }
@@ -1820,14 +2054,17 @@ private fun ChildInfoScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
-                    enabled = !isSaving,
+                    enabled = !isSaving && repository != null,
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = AppBlue)
                 ) {
                     if (isSaving) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                     } else {
-                        Text("Сақтау", fontWeight = FontWeight.Bold)
+                        Text(
+                            if (isDemoMode) "Демода сақтау өшірулі" else "Сақтау",
+                            fontWeight = FontWeight.Bold,
+                        )
                     }
                 }
             }

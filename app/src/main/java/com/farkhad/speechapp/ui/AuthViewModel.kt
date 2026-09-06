@@ -164,6 +164,16 @@ class AuthViewModel(
         }
     }
 
+    fun enterDemoMode() {
+        authenticationInProgress = false
+        email = ""
+        password = ""
+        emailError = null
+        passwordError = null
+        authNoticeMessage = null
+        authState = AuthUiState.Demo
+    }
+
     fun resendVerificationEmail() {
         if (verificationCooldownSeconds > 0 ||
             verificationActionState is AccountActionUiState.Loading

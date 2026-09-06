@@ -37,6 +37,7 @@ class SpeechAudio(context: Context) {
     private val kazakh = Locale.forLanguageTag("kk-KZ")
     private val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 55)
     private var engine: TextToSpeech? = null
+    private var ttsInitializing = false
     private var ttsReady = false
     private var deviceSupportsKazakh = false
     private var pendingTts: SpeechRequest? = null
@@ -54,11 +55,24 @@ class SpeechAudio(context: Context) {
     var supportsKazakh by mutableStateOf(true)
         private set
 
-    init {
-        val created = TextToSpeech(appContext) { status ->
-            mainHandler.post { finishTtsInitialization(status) }
+    // The course normally uses audio bundled in the APK. Android TTS is created
+    // only if a phrase has no bundled recording, keeping navigation instant on
+    // devices where the system speech service is slow to start.
+    private fun initializeTts() {
+        if (closed || engine != null || ttsInitializing) return
+        ttsInitializing = true
+        try {
+            val created = TextToSpeech(appContext) { status ->
+                mainHandler.post {
+                    ttsInitializing = false
+                    finishTtsInitialization(status)
+                }
+            }
+            engine = created
+        } catch (_: Exception) {
+            ttsInitializing = false
+            showPlaybackError()
         }
-        engine = created
     }
 
     private fun finishTtsInitialization(status: Int) {
@@ -126,6 +140,12 @@ class SpeechAudio(context: Context) {
             if (!playBundledSpeech(request)) {
                 speakWithDeviceVoice(request)
             }
+        }
+    }
+
+    fun stop() {
+        mainHandler.post {
+            if (!closed) stopSpeech()
         }
     }
 
@@ -203,11 +223,8 @@ class SpeechAudio(context: Context) {
     private fun speakWithDeviceVoice(request: SpeechRequest) {
         val tts = engine
         if (!ttsReady) {
-            if (tts != null) {
-                pendingTts = request
-            } else {
-                showPlaybackError()
-            }
+            pendingTts = request
+            if (tts == null) initializeTts()
             return
         }
         if (!deviceSupportsKazakh || tts == null) {

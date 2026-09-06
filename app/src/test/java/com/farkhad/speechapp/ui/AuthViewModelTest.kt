@@ -66,6 +66,22 @@ class AuthViewModelTest {
     }
 
     @Test
+    fun demoModeDoesNotCallFirebaseAndClearsCredentials() {
+        val repository = FakeAuthRepository()
+        val viewModel = AuthViewModel(repository)
+        viewModel.onEmailChanged("presenter@example.kz")
+        viewModel.onPasswordChanged("StrongPass1")
+
+        viewModel.enterDemoMode()
+
+        assertEquals(AuthUiState.Demo, viewModel.authState)
+        assertEquals("", viewModel.email)
+        assertEquals("", viewModel.password)
+        assertEquals(0, repository.signInCalls)
+        assertEquals(0, repository.createAccountCalls)
+    }
+
+    @Test
     fun successfulLoginUsesTrimmedEmailAndKeepsPasswordCharacters() = runTest {
         val repository = FakeAuthRepository()
         var submittedEmail = ""

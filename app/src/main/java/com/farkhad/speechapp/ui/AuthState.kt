@@ -5,6 +5,7 @@ import com.farkhad.speechapp.data.AuthenticatedUser
 sealed interface AuthUiState {
     data object Loading : AuthUiState
     data object Unauthenticated : AuthUiState
+    data object Demo : AuthUiState
     data class VerificationRequired(val user: AuthenticatedUser) : AuthUiState
     data class Authenticated(val user: AuthenticatedUser) : AuthUiState
     data class Error(val message: String) : AuthUiState

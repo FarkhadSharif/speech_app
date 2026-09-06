@@ -27,6 +27,11 @@ class MainActivity : ComponentActivity() {
                     viewModel = authViewModel,
                     user = authState.user,
                 )
+                AuthUiState.Demo -> SpeechApp(
+                    userId = "local-presentation-demo",
+                    isDemoMode = true,
+                    onSignOut = authViewModel::signOut,
+                )
                 is AuthUiState.Authenticated -> SpeechApp(
                     userId = authState.user.id,
                     onSignOut = authViewModel::signOut,

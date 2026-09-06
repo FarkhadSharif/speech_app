@@ -130,6 +130,33 @@ class ProgressRepository(context: Context, uid: String) {
         revision += 1
     }
 
+    val assessedSoundScores: Map<Char, Int>
+        get() {
+            val serialized = preferences.getString(KEY_SOUND_SCORES, "").orEmpty()
+            if (serialized.isBlank()) return emptyMap()
+            return serialized.split(",").mapNotNull { entry ->
+                val parts = entry.split(":", limit = 2)
+                val sound = parts.getOrNull(0)?.singleOrNull() ?: return@mapNotNull null
+                val score = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 100)
+                    ?: return@mapNotNull null
+                sound to score
+            }.toMap()
+        }
+
+    val lastAssessmentAt: Long
+        get() = preferences.getLong(KEY_LAST_ASSESSMENT_AT, 0L)
+
+    fun saveAssessedSoundScores(scores: Map<Char, Int>) {
+        val serialized = scores.entries.joinToString(",") { (sound, score) ->
+            "$sound:${score.coerceIn(0, 100)}"
+        }
+        preferences.edit()
+            .putString(KEY_SOUND_SCORES, serialized)
+            .putLong(KEY_LAST_ASSESSMENT_AT, System.currentTimeMillis())
+            .apply()
+        revision += 1
+    }
+
     fun resetProgress() {
         preferences.edit().clear().apply()
         revision += 1
@@ -141,6 +168,8 @@ class ProgressRepository(context: Context, uid: String) {
         private const val KEY_SESSIONS = "sessions"
         private const val KEY_PRONUNCIATION_FAILS = "pronunciation_fails"
         private const val KEY_LEARNED_WORDS = "learned_words"
+        private const val KEY_SOUND_SCORES = "assessed_sound_scores"
+        private const val KEY_LAST_ASSESSMENT_AT = "last_assessment_at"
     }
 }
 
