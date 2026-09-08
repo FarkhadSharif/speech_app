@@ -714,7 +714,7 @@ private fun LevelRouteMap(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState, reverseScrolling = true)
-            .padding(vertical = 100.dp),
+            .padding(top = 100.dp, bottom = 370.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         levels.reversed().forEachIndexed { index, level ->
