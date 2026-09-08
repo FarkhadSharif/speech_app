@@ -19,8 +19,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -129,7 +133,12 @@ fun SoundMapScreen(
                         modifier = Modifier.padding(18.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Text("🎙️", fontSize = 34.sp)
+                        Icon(
+                            Icons.Outlined.Mic,
+                            contentDescription = null,
+                            tint = AppBlue,
+                            modifier = Modifier.size(33.dp),
+                        )
                         Text(
                             "Алдымен сөйлеуді тексеріңіз\nСначала пройдите экспресс-оценку",
                             modifier = Modifier.padding(top = 8.dp),
@@ -318,12 +327,17 @@ private fun SoundPracticePanel(
                             color = AppBlue.copy(alpha = 0.10f),
                             shape = RoundedCornerShape(14.dp),
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    "${item.word.emoji} ${item.word.word}  🔊",
-                                    color = AppText,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp,
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                            ) {
+                                Text(item.word.word, color = AppText, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Icon(
+                                    Icons.Outlined.VolumeUp,
+                                    contentDescription = "Тыңдау",
+                                    tint = AppBlue,
+                                    modifier = Modifier.padding(start = 7.dp).size(17.dp),
                                 )
                             }
                         }

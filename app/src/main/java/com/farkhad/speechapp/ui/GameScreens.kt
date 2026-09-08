@@ -19,6 +19,21 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.EmojiEvents
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.MusicNote
+import androidx.compose.material.icons.outlined.Photo
+import androidx.compose.material.icons.outlined.RecordVoiceOver
+import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material.icons.outlined.TouchApp
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -41,6 +56,11 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import com.farkhad.speechapp.audio.*
+import com.farkhad.speechapp.data.AudioRoundEvidence
+import com.farkhad.speechapp.data.ExerciseAnalysisType
+import com.farkhad.speechapp.data.ExerciseSessionReport
+import com.farkhad.speechapp.data.ExerciseSessionSource
+import com.farkhad.speechapp.data.ExerciseStepReport
 import com.farkhad.speechapp.data.FirebaseRepository
 import com.farkhad.speechapp.data.ProgressRepository
 import com.farkhad.speechapp.model.*
@@ -56,7 +76,7 @@ fun GameSessionScreen(
     audio: SpeechAudio,
     repository: FirebaseRepository?,
     onBack: () -> Unit,
-    onSaveResult: (Int) -> Unit,
+    onSaveResult: (ExerciseSessionReport) -> Unit,
     onNextActivity: () -> Unit,
     hasNextActivity: Boolean,
 ) {
@@ -64,6 +84,9 @@ fun GameSessionScreen(
     var earnedPoints by rememberSaveable(activity.id) { mutableStateOf(0) }
     var roundFinished by rememberSaveable(activity.id, roundIndex) { mutableStateOf(false) }
     var resultScore by rememberSaveable(activity.id) { mutableStateOf<Int?>(null) }
+    var sessionStartedAt by rememberSaveable(activity.id) { mutableStateOf(System.currentTimeMillis()) }
+    val roundScores = remember(activity.id) { mutableStateMapOf<String, Int>() }
+    val audioEvidence = remember(activity.id) { mutableStateMapOf<String, AudioRoundEvidence>() }
 
     if (resultScore != null) {
         GameResultScreen(
@@ -74,6 +97,9 @@ fun GameSessionScreen(
                 earnedPoints = 0
                 roundFinished = false
                 resultScore = null
+                sessionStartedAt = System.currentTimeMillis()
+                roundScores.clear()
+                audioEvidence.clear()
             },
             onNext = onNextActivity,
             hasNext = hasNextActivity,
@@ -107,7 +133,6 @@ fun GameSessionScreen(
         ) {
             GameHeader(
                 title = activity.title,
-                emoji = activity.emoji,
                 onBack = onBack,
             )
             
@@ -136,7 +161,7 @@ fun GameSessionScreen(
                     border = BorderStroke(1.dp, AppBlue.copy(alpha = 0.3f))
                 ) {
                     Text(
-                        text = " 🇰🇿 Тапсырма ${roundIndex + 1}/${activity.rounds.size} ",
+                        text = "Тапсырма ${roundIndex + 1}/${activity.rounds.size}",
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         color = AppText,
                         fontWeight = FontWeight.Bold,
@@ -185,6 +210,7 @@ fun GameSessionScreen(
                         onEvaluated = { points ->
                             if (!roundFinished) {
                                 earnedPoints += points
+                                roundScores[round.id] = points
                                 roundFinished = true
                             }
                         },
@@ -196,6 +222,7 @@ fun GameSessionScreen(
                         onEvaluated = { points ->
                             if (!roundFinished) {
                                 earnedPoints += points
+                                roundScores[round.id] = points
                                 roundFinished = true
                             }
                         },
@@ -207,6 +234,7 @@ fun GameSessionScreen(
                         onEvaluated = { points ->
                             if (!roundFinished) {
                                 earnedPoints += points
+                                roundScores[round.id] = points
                                 roundFinished = true
                             }
                         },
@@ -218,6 +246,7 @@ fun GameSessionScreen(
                         onEvaluated = { points ->
                             if (!roundFinished) {
                                 earnedPoints += points
+                                roundScores[round.id] = points
                                 roundFinished = true
                             }
                         },
@@ -228,9 +257,11 @@ fun GameSessionScreen(
                         audio = audio,
                         repository = repository,
                         enabled = !roundFinished,
+                        onAudioEvidence = { evidence -> audioEvidence[round.id] = evidence },
                         onEvaluated = { points ->
                             if (!roundFinished) {
                                 earnedPoints += points
+                                roundScores[round.id] = points
                                 roundFinished = true
                             }
                         },
@@ -247,8 +278,43 @@ fun GameSessionScreen(
                     onClick = {
                         if (roundIndex == activity.rounds.lastIndex) {
                             val score = (earnedPoints.toFloat() / activity.rounds.size).toInt().coerceIn(0, 100)
+                            val completedAt = System.currentTimeMillis()
+                            val report = ExerciseSessionReport(
+                                sessionId = "${completedAt}_${activity.id}",
+                                activityId = activity.id,
+                                activityTitle = activity.title,
+                                levelId = level.id,
+                                levelTitle = level.title,
+                                completedAt = completedAt,
+                                durationSeconds = ((completedAt - sessionStartedAt) / 1000L).coerceAtLeast(1L),
+                                score = score,
+                                attemptNumber = progress.attemptsFor(activity.id) + 1,
+                                source = ExerciseSessionSource.LESSON,
+                                steps = activity.rounds.map { completedRound ->
+                                    val evidence = audioEvidence[completedRound.id]
+                                    val roundScore = roundScores[completedRound.id] ?: 0
+                                    ExerciseStepReport(
+                                        stepId = completedRound.id,
+                                        title = completedRound.instruction,
+                                        score = roundScore,
+                                        attempts = evidence?.attempts?.coerceAtLeast(1) ?: 1,
+                                        analysisType = when {
+                                            completedRound !is VoiceRound -> ExerciseAnalysisType.INTERACTION
+                                            evidence?.automaticAnalysisUsed == true -> ExerciseAnalysisType.AUDIO
+                                            else -> ExerciseAnalysisType.ADULT_ASSISTED
+                                        },
+                                        targetText = evidence?.targetText ?: completedRound.reportTargetText(),
+                                        recognizedText = evidence?.recognizedText.orEmpty(),
+                                        feedback = when {
+                                            roundScore >= 85 -> "Өздігінен жақсы орындады"
+                                            roundScore >= 60 -> "Қолдаумен аяқтады"
+                                            else -> "Қайталап көру пайдалы"
+                                        },
+                                    )
+                                },
+                            )
                             resultScore = score
-                            onSaveResult(score)
+                            onSaveResult(report)
                             audio.playCelebration()
                         } else {
                             roundIndex += 1
@@ -263,7 +329,7 @@ fun GameSessionScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = AppGreen),
                 ) {
                     Text(
-                        text = if (roundIndex == activity.rounds.lastIndex) "Нәтижені көру ✨" else "Алға, келесі тапсырма →",
+                        text = if (roundIndex == activity.rounds.lastIndex) "Нәтижені көру" else "Алға, келесі тапсырма →",
                         color = Color.White,
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 18.sp,
@@ -282,6 +348,29 @@ private fun ExerciseRound.spokenModel(): String = when (this) {
     is VoiceRound -> modelText
 }
 
+private fun ExerciseRound.reportTargetText(): String = when (this) {
+    is ChoiceRound -> display
+    is TapCountRound -> word
+    is ArrangeWordsRound -> wordsInOrder.joinToString(" ")
+    is StoryOrderRound -> cardsInOrder.joinToString(" → ") { it.text }
+    is VoiceRound -> modelText
+}
+
+private fun String.withoutEmoji(): String {
+    val result = StringBuilder()
+    var index = 0
+    while (index < length) {
+        val codePoint = codePointAt(index)
+        val isEmoji = codePoint in 0x1F000..0x1FAFF ||
+            codePoint in 0x2600..0x27BF ||
+            codePoint in 0x1F1E6..0x1F1FF ||
+            codePoint == 0xFE0F || codePoint == 0x200D || codePoint == 0x20E3
+        if (!isEmoji) result.appendCodePoint(codePoint)
+        index += Character.charCount(codePoint)
+    }
+    return result.toString().replace(Regex("\\s+"), " ").trim()
+}
+
 @Composable
 private fun ChoiceExercise(
     round: ChoiceRound,
@@ -294,7 +383,7 @@ private fun ChoiceExercise(
 
     QuestionCard {
         Text(
-            text = round.display,
+            text = round.display.withoutEmoji(),
             fontSize = if (round.display.length <= 8) 48.sp else 32.sp,
             fontWeight = FontWeight.ExtraBold,
             color = AppText,
@@ -339,8 +428,8 @@ private fun ChoiceExercise(
             border = BorderStroke(2.dp, border),
             shadowElevation = 2.dp
         ) {
-            Text(
-                text = option,
+                    Text(
+                        text = option.withoutEmoji(),
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
                 color = AppText,
                 fontSize = 20.sp,
@@ -370,7 +459,7 @@ private fun TapCountExercise(
     val correct = taps == round.correctTaps
 
     QuestionCard {
-        Text(round.emoji, fontSize = 84.sp)
+        Icon(Icons.Outlined.TouchApp, contentDescription = null, tint = AppOrange, modifier = Modifier.size(72.dp))
         Text(
             text = round.word,
             color = AppPurple,
@@ -416,7 +505,7 @@ private fun TapCountExercise(
             shadowElevation = 6.dp
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Text("🥁", fontSize = 72.sp)
+                Icon(Icons.Outlined.MusicNote, contentDescription = null, tint = AppOrange, modifier = Modifier.size(68.dp))
             }
         }
         Spacer(modifier = Modifier.width(32.dp))
@@ -485,7 +574,7 @@ private fun ArrangeWordsExercise(
     val correct = selectedWords == round.wordsInOrder
 
     QuestionCard {
-        Text("💬", fontSize = 64.sp)
+        Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null, tint = AppBlue, modifier = Modifier.size(58.dp))
         Text(
             text = if (selectedWords.isEmpty()) "Сөздерді ретімен таңда" else selectedWords.joinToString(" "),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -567,7 +656,7 @@ private fun StoryOrderExercise(
     QuestionCard {
         Text(
             text = if (selectedIndices.isEmpty()) "1 → 2 → 3" else selectedIndices.mapIndexed { pos, idx ->
-                "${pos + 1}. ${round.cardsInOrder[idx].emoji}"
+                "${pos + 1}. ${round.cardsInOrder[idx].text.withoutEmoji()}"
             }.joinToString("   "),
             fontSize = 28.sp,
             fontWeight = FontWeight.ExtraBold,
@@ -596,7 +685,7 @@ private fun StoryOrderExercise(
                 modifier = Modifier.padding(20.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(card.emoji, fontSize = 42.sp)
+                Icon(Icons.Outlined.Photo, contentDescription = null, tint = AppBlue, modifier = Modifier.size(38.dp))
                 Text(
                     text = card.text,
                     modifier = Modifier.padding(start = 20.dp),
@@ -657,6 +746,7 @@ private fun VoiceExercise(
     audio: SpeechAudio,
     repository: FirebaseRepository?,
     enabled: Boolean,
+    onAudioEvidence: (AudioRoundEvidence) -> Unit,
     onEvaluated: (Int) -> Unit,
 ) {
     val context = LocalContext.current
@@ -761,6 +851,14 @@ private fun VoiceExercise(
                             }
                         }
 
+                        onAudioEvidence(
+                            AudioRoundEvidence(
+                                attempts = attempts.coerceAtLeast(1),
+                                targetText = round.modelText,
+                                recognizedText = transcription,
+                                automaticAnalysisUsed = true,
+                            ),
+                        )
                         onEvaluated(100)
                     } else {
                         recognitionMessage = "Жақсы талпыныс. Кейбір сөздерді түзетіп көрейік."
@@ -789,7 +887,7 @@ private fun VoiceExercise(
     }
 
     QuestionCard {
-        Text(round.picture, fontSize = 84.sp)
+        Icon(Icons.Outlined.RecordVoiceOver, contentDescription = null, tint = AppGreen, modifier = Modifier.size(70.dp))
         
         if (wordResults != null) {
             Text(
@@ -839,7 +937,9 @@ private fun VoiceExercise(
         shape = RoundedCornerShape(18.dp),
         colors = ButtonDefaults.buttonColors(containerColor = AppBlue),
     ) {
-        Text("🔊  Үлгіні тыңдау", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        Icon(Icons.Outlined.VolumeUp, contentDescription = null, modifier = Modifier.size(21.dp))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text("Үлгіні тыңдау", fontWeight = FontWeight.Bold, fontSize = 16.sp)
     }
     Spacer(modifier = Modifier.height(12.dp))
     
@@ -864,7 +964,12 @@ private fun VoiceExercise(
             shadowElevation = 6.dp
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Text(if (listening) "🎤" else "🎙️", fontSize = 32.sp)
+                Icon(
+                    Icons.Outlined.Mic,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(if (listening) 34.dp else 30.dp),
+                )
             }
         }
     }
@@ -893,19 +998,29 @@ private fun VoiceExercise(
             onClick = {
                 evaluated = true
                 audio.playCorrect()
+                onAudioEvidence(
+                    AudioRoundEvidence(
+                        attempts = attempts.coerceAtLeast(1),
+                        targetText = round.modelText,
+                        recognizedText = heardText,
+                        automaticAnalysisUsed = false,
+                    ),
+                )
                 onEvaluated(85)
             },
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
             enabled = enabled,
         ) {
-            Text("👪  Ересекпен бірге айттым", color = AppText.copy(alpha = 0.6f))
+            Icon(Icons.Outlined.Groups, contentDescription = null, tint = AppText.copy(alpha = 0.6f), modifier = Modifier.size(19.dp))
+            Spacer(modifier = Modifier.width(7.dp))
+            Text("Ересекпен бірге айттым", color = AppText.copy(alpha = 0.6f))
         }
     }
 
     FeedbackCard(
         visible = evaluated,
         success = true,
-        successText = "Жарайсың! Сен нағыз батырсың! 🐎",
+        successText = "Жарайсың! Сен бұл тапсырманы орындадың.",
         supportText = "",
     )
     
@@ -919,6 +1034,14 @@ private fun VoiceExercise(
                     onClick = {
                         showRestDialog = false
                         evaluated = true
+                        onAudioEvidence(
+                            AudioRoundEvidence(
+                                attempts = attempts.coerceAtLeast(1),
+                                targetText = round.modelText,
+                                recognizedText = heardText,
+                                automaticAnalysisUsed = attempts > 0,
+                            ),
+                        )
                         onEvaluated(60) // Partial points for trying
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = AppOrange)
@@ -941,9 +1064,12 @@ private fun VoiceExercise(
         border = BorderStroke(1.dp, AppBlue.copy(alpha = 0.2f))
     ) {
         Column(modifier = Modifier.padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("🚀 Күнделікті мақсат", color = AppBlue, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Flag, contentDescription = null, tint = AppBlue, modifier = Modifier.size(20.dp))
+                Text("Күнделікті мақсат", modifier = Modifier.padding(start = 7.dp), color = AppBlue, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+            }
             Text(
-                text = round.childEncouragement,
+                text = round.childEncouragement.withoutEmoji(),
                 modifier = Modifier.padding(top = 8.dp),
                 color = AppText,
                 fontSize = 14.sp,
@@ -1009,14 +1135,22 @@ private fun FeedbackCard(
             shape = RoundedCornerShape(20.dp),
             shadowElevation = 2.dp
         ) {
-            Text(
-                text = if (success) "🌟  $successText" else "💛  $supportText",
-                modifier = Modifier.padding(20.dp),
-                color = AppText,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                lineHeight = 24.sp,
-            )
+            Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    if (success) Icons.Outlined.CheckCircle else Icons.Outlined.FavoriteBorder,
+                    contentDescription = null,
+                    tint = if (success) AppGreen else AppOrange,
+                    modifier = Modifier.size(23.dp),
+                )
+                Text(
+                    text = (if (success) successText else supportText).withoutEmoji(),
+                    modifier = Modifier.padding(start = 10.dp).weight(1f),
+                    color = AppText,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    lineHeight = 24.sp,
+                )
+            }
         }
     }
 }
@@ -1032,19 +1166,23 @@ private fun ListenButton(enabled: Boolean, onClick: () -> Unit) {
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
     ) {
-        Text(if (enabled) "🔊 Тыңдау" else "Дайындалуда…", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+        if (enabled) {
+            Icon(Icons.Outlined.VolumeUp, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+        }
+        Text(if (enabled) "Тыңдау" else "Дайындалуда…", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
     }
 }
 
 @Composable
-private fun GameHeader(title: String, emoji: String, onBack: () -> Unit) {
+private fun GameHeader(title: String, onBack: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BackButton(onClick = onBack)
         Text(
-            text = "$emoji  $title",
+            text = title,
             modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
             color = AppText,
             fontSize = 20.sp,
@@ -1107,7 +1245,12 @@ private fun GameResultScreen(
                 border = BorderStroke(6.dp, AppGold)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Text(if (stars == 3) "🏆" else "🌟", fontSize = 84.sp)
+                    Icon(
+                        if (stars == 3) Icons.Outlined.EmojiEvents else Icons.Outlined.Star,
+                        contentDescription = null,
+                        tint = AppGold,
+                        modifier = Modifier.size(82.dp),
+                    )
                 }
             }
             
@@ -1134,10 +1277,11 @@ private fun GameResultScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 repeat(3) { i ->
-                    Text(
-                        text = if (i < stars) "⭐" else "☆",
-                        fontSize = 56.sp,
-                        color = AppGold
+                    Icon(
+                        imageVector = if (i < stars) Icons.Outlined.Star else Icons.Outlined.StarBorder,
+                        contentDescription = null,
+                        tint = AppGold,
+                        modifier = Modifier.size(54.dp),
                     )
                 }
             }

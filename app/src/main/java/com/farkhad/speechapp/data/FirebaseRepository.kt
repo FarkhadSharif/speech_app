@@ -248,6 +248,94 @@ class FirebaseRepository : AuthRepository {
         }
     }
 
+    suspend fun saveExerciseSessionReport(report: ExerciseSessionReport): Result<Boolean> {
+        return try {
+            val uid = auth.currentUser?.uid ?: throw Exception("No user logged in")
+            val steps = report.steps.map { step ->
+                mapOf(
+                    "stepId" to step.stepId,
+                    "title" to step.title,
+                    "score" to step.score,
+                    "attempts" to step.attempts,
+                    "analysisType" to step.analysisType,
+                    "targetText" to step.targetText,
+                    "recognizedText" to step.recognizedText,
+                    "feedback" to step.feedback,
+                    "mouthOpeningPercent" to step.mouthOpeningPercent,
+                    "lipRoundingPercent" to step.lipRoundingPercent,
+                    "holdSeconds" to step.holdSeconds,
+                )
+            }
+            val data = mapOf(
+                "sessionId" to report.sessionId,
+                "activityId" to report.activityId,
+                "activityTitle" to report.activityTitle,
+                "levelId" to report.levelId,
+                "levelTitle" to report.levelTitle,
+                "completedAt" to report.completedAt,
+                "durationSeconds" to report.durationSeconds,
+                "score" to report.score,
+                "attemptNumber" to report.attemptNumber,
+                "source" to report.source,
+                "steps" to steps,
+            )
+            db.collection("users").document(uid)
+                .collection("exerciseReports").document(report.sessionId)
+                .set(data, SetOptions.merge()).await()
+            Result.success(true)
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    suspend fun getExerciseSessionReports(): Result<List<ExerciseSessionReport>> {
+        return try {
+            val uid = auth.currentUser?.uid ?: throw Exception("No user logged in")
+            val snapshot = db.collection("users").document(uid)
+                .collection("exerciseReports")
+                .get().await()
+            val reports = snapshot.documents.mapNotNull { document ->
+                val sessionId = document.getString("sessionId") ?: document.id
+                val completedAt = document.getLong("completedAt") ?: return@mapNotNull null
+                val steps = (document.get("steps") as? List<*>)
+                    .orEmpty()
+                    .mapNotNull stepLoop@{ rawStep ->
+                        val step = rawStep as? Map<*, *> ?: return@stepLoop null
+                        ExerciseStepReport(
+                            stepId = step["stepId"] as? String ?: return@stepLoop null,
+                            title = step["title"] as? String ?: "",
+                            score = (step["score"] as? Number)?.toInt()?.coerceIn(0, 100) ?: 0,
+                            attempts = (step["attempts"] as? Number)?.toInt()?.coerceAtLeast(1) ?: 1,
+                            analysisType = step["analysisType"] as? String
+                                ?: ExerciseAnalysisType.INTERACTION,
+                            targetText = step["targetText"] as? String ?: "",
+                            recognizedText = step["recognizedText"] as? String ?: "",
+                            feedback = step["feedback"] as? String ?: "",
+                            mouthOpeningPercent = (step["mouthOpeningPercent"] as? Number)?.toInt() ?: -1,
+                            lipRoundingPercent = (step["lipRoundingPercent"] as? Number)?.toInt() ?: -1,
+                            holdSeconds = (step["holdSeconds"] as? Number)?.toInt()?.coerceAtLeast(0) ?: 0,
+                        )
+                    }
+                ExerciseSessionReport(
+                    sessionId = sessionId,
+                    activityId = document.getString("activityId").orEmpty(),
+                    activityTitle = document.getString("activityTitle").orEmpty(),
+                    levelId = (document.getLong("levelId") ?: 0L).toInt(),
+                    levelTitle = document.getString("levelTitle").orEmpty(),
+                    completedAt = completedAt,
+                    durationSeconds = (document.getLong("durationSeconds") ?: 1L).coerceAtLeast(1L),
+                    score = (document.getLong("score") ?: 0L).toInt().coerceIn(0, 100),
+                    attemptNumber = (document.getLong("attemptNumber") ?: 1L).toInt().coerceAtLeast(1),
+                    source = document.getString("source") ?: ExerciseSessionSource.LESSON,
+                    steps = steps,
+                )
+            }.sortedByDescending { it.completedAt }
+            Result.success(reports)
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
     private suspend fun <T> authResult(
         defaultReason: AuthFailureReason = AuthFailureReason.Unknown,
         action: suspend () -> T,

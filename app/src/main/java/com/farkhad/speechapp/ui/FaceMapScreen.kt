@@ -26,9 +26,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.EmojiEvents
+import androidx.compose.material.icons.outlined.Face
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -38,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -61,6 +67,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.farkhad.speechapp.audio.SpeechAudio
+import com.farkhad.speechapp.data.ExerciseAnalysisType
+import com.farkhad.speechapp.data.ExerciseStepReport
 import com.farkhad.speechapp.facemap.FaceContourPath
 import com.farkhad.speechapp.facemap.FaceMapAnalyzer
 import com.farkhad.speechapp.facemap.FaceMapEvaluator
@@ -83,6 +91,7 @@ fun FaceMapScreen(
     audio: SpeechAudio,
     onBack: () -> Unit,
     onCompleted: (() -> Unit)? = null,
+    onAnalysisCompleted: ((List<ExerciseStepReport>, Long) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     var cameraGranted by remember {
@@ -107,6 +116,7 @@ fun FaceMapScreen(
         audio = audio,
         onBack = onBack,
         onCompleted = onCompleted,
+        onAnalysisCompleted = onAnalysisCompleted,
     )
 }
 
@@ -158,12 +168,16 @@ private fun FaceMapCameraExperience(
     audio: SpeechAudio,
     onBack: () -> Unit,
     onCompleted: (() -> Unit)?,
+    onAnalysisCompleted: ((List<ExerciseStepReport>, Long) -> Unit)?,
 ) {
     val exercises = FaceMapExercise.entries
     var exerciseIndex by rememberSaveable { mutableStateOf(0) }
     var completedExercises by remember { mutableStateOf(emptySet<FaceMapExercise>()) }
     var frame by remember { mutableStateOf(FaceMapFrame()) }
     var cameraError by remember { mutableStateOf<String?>(null) }
+    var sessionStartedAt by rememberSaveable { mutableStateOf(System.currentTimeMillis()) }
+    var analysisReported by rememberSaveable { mutableStateOf(false) }
+    val exerciseReports = remember { mutableStateMapOf<FaceMapExercise, ExerciseStepReport>() }
     val exercise = exercises[exerciseIndex]
     var holdProgress by remember(exercise) { mutableStateOf(0f) }
     val evaluation = FaceMapEvaluator.evaluate(exercise, frame)
@@ -185,7 +199,31 @@ private fun FaceMapCameraExperience(
             delay(HOLD_STEP_MS)
             holdProgress = (step + 1f) / HOLD_STEPS.toFloat()
         }
-        completedExercises = completedExercises + exercise
+        val exerciseReport = ExerciseStepReport(
+            stepId = "face_${exercise.name.lowercase()}",
+            title = exercise.title.substringBefore(" / "),
+            score = (evaluation.progress * 100).toInt().coerceIn(0, 100),
+            attempts = 1,
+            analysisType = ExerciseAnalysisType.VIDEO,
+            targetText = exercise.instruction.substringBefore(" / "),
+            feedback = evaluation.status.substringBefore(" / "),
+            mouthOpeningPercent = (evaluation.openingScore * 100).toInt().coerceIn(0, 100),
+            lipRoundingPercent = (evaluation.roundingScore * 100).toInt().coerceIn(0, 100),
+            holdSeconds = 2,
+        )
+        exerciseReports[exercise] = exerciseReport
+        val updatedCompleted = completedExercises + exercise
+        completedExercises = updatedCompleted
+        if (updatedCompleted.size == exercises.size && !analysisReported) {
+            analysisReported = true
+            val orderedReports = exercises.mapNotNull { item ->
+                if (item == exercise) exerciseReport else exerciseReports[item]
+            }
+            onAnalysisCompleted?.invoke(
+                orderedReports,
+                ((System.currentTimeMillis() - sessionStartedAt) / 1000L).coerceAtLeast(1L),
+            )
+        }
         audio.playCorrect()
         delay(650)
         if (exerciseIndex < exercises.lastIndex) {
@@ -285,6 +323,9 @@ private fun FaceMapCameraExperience(
             onRestart = {
                 completedExercises = emptySet()
                 exerciseIndex = 0
+                exerciseReports.clear()
+                analysisReported = false
+                sessionStartedAt = System.currentTimeMillis()
             },
             onComplete = onCompleted,
         )
@@ -311,7 +352,7 @@ private fun FaceMapTopBar(
                     .padding(horizontal = 12.dp),
             ) {
                 Text(
-                    "✨ Face Map",
+                    "Face Map",
                     color = Color.White,
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 20.sp,
@@ -362,7 +403,12 @@ private fun FaceMapExercisePanel(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (allComplete) {
-                Text("🏆", fontSize = 38.sp)
+                Icon(
+                    Icons.Outlined.EmojiEvents,
+                    contentDescription = null,
+                    tint = AppGreen,
+                    modifier = Modifier.size(38.dp),
+                )
                 Text(
                     "Барлық жаттығу орындалды!",
                     color = Color.White,
@@ -393,7 +439,12 @@ private fun FaceMapExercisePanel(
                 }
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(exercise.emoji, fontSize = 38.sp)
+                    Icon(
+                        Icons.Outlined.Face,
+                        contentDescription = null,
+                        tint = AppGreen,
+                        modifier = Modifier.size(38.dp),
+                    )
                     Column(modifier = Modifier.padding(start = 12.dp)) {
                         Text(
                             exercise.title,
@@ -489,7 +540,12 @@ private fun FaceMapExercisePanel(
                         },
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Text(if (done) "✓" else item.emoji, fontSize = 18.sp, color = Color.White)
+                            Icon(
+                                if (done) Icons.Outlined.Check else Icons.Outlined.Face,
+                                contentDescription = item.title,
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp),
+                            )
                         }
                     }
                 }
@@ -750,7 +806,7 @@ private fun SuccessGlow(modifier: Modifier = Modifier) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Text("✓", color = Color.White, fontSize = 48.sp, fontWeight = FontWeight.Black)
+            Icon(Icons.Outlined.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(46.dp))
             Text("Керемет!", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
     }

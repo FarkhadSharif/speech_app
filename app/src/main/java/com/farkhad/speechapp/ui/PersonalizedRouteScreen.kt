@@ -18,8 +18,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Event
+import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.RecordVoiceOver
+import androidx.compose.material.icons.outlined.School
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -127,7 +135,12 @@ private fun EmptyRoute(onStartAssessment: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("🧭", fontSize = 72.sp)
+        Icon(
+            Icons.Outlined.Explore,
+            contentDescription = null,
+            tint = AppRed,
+            modifier = Modifier.size(64.dp),
+        )
         Text(
             "Жеке маршрут құрайық\nСоздадим персональный маршрут",
             modifier = Modifier.padding(top = 20.dp),
@@ -276,7 +289,9 @@ private fun RouteContent(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Surface(modifier = Modifier.size(52.dp), shape = CircleShape, color = AppGreen) {
-                    Box(contentAlignment = Alignment.Center) { Text("📅", fontSize = 25.sp) }
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Outlined.Event, contentDescription = null, tint = Color.White, modifier = Modifier.size(25.dp))
+                    }
                 }
                 Column(modifier = Modifier.padding(start = 13.dp).weight(1f)) {
                     Text(
@@ -340,7 +355,7 @@ private fun RouteWordCard(item: RouteWord, onClick: () -> Unit, modifier: Modifi
             modifier = Modifier.padding(horizontal = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(item.word.emoji, fontSize = 24.sp)
+            Icon(Icons.Outlined.RecordVoiceOver, contentDescription = null, tint = AppRed, modifier = Modifier.size(22.dp))
             Text(
                 item.word.word,
                 modifier = Modifier.padding(start = 8.dp).weight(1f),
@@ -348,7 +363,7 @@ private fun RouteWordCard(item: RouteWord, onClick: () -> Unit, modifier: Modifi
                 fontWeight = FontWeight.Bold,
                 fontSize = 13.sp,
             )
-            Text("🔊", fontSize = 15.sp)
+            Icon(Icons.Outlined.VolumeUp, contentDescription = "Тыңдау", tint = AppText.copy(alpha = 0.62f), modifier = Modifier.size(18.dp))
         }
     }
 }
@@ -373,7 +388,12 @@ private fun RouteActivityCard(number: Int, item: RouteActivity, onClick: () -> U
                     Text(number.toString(), color = Color.White, fontWeight = FontWeight.Black)
                 }
             }
-            Text(item.activity.emoji, modifier = Modifier.padding(start = 12.dp), fontSize = 28.sp)
+            Icon(
+                Icons.Outlined.School,
+                contentDescription = null,
+                tint = AppRed,
+                modifier = Modifier.padding(start = 12.dp).size(27.dp),
+            )
             Column(modifier = Modifier.padding(start = 10.dp).weight(1f)) {
                 Text(item.activity.title, color = AppText, fontWeight = FontWeight.ExtraBold)
                 Text(
@@ -382,7 +402,7 @@ private fun RouteActivityCard(number: Int, item: RouteActivity, onClick: () -> U
                     fontSize = 11.sp,
                 )
             }
-            Text("›", color = AppPurple, fontWeight = FontWeight.Black, fontSize = 25.sp)
+            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = AppPurple, modifier = Modifier.size(24.dp))
         }
     }
 }

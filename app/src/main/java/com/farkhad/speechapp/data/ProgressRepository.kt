@@ -148,6 +148,117 @@ class ProgressRepository(context: Context, uid: String) {
     val lastAssessmentAt: Long
         get() = preferences.getLong(KEY_LAST_ASSESSMENT_AT, 0L)
 
+    val exerciseSessionReports: List<ExerciseSessionReport>
+        get() {
+            val source = preferences.getString(KEY_EXERCISE_REPORTS, "[]").orEmpty()
+            return runCatching {
+                val array = JSONArray(source)
+                buildList {
+                    for (index in 0 until array.length()) {
+                        val item = array.getJSONObject(index)
+                        val stepsArray = item.optJSONArray("steps") ?: JSONArray()
+                        val steps = buildList {
+                            for (stepIndex in 0 until stepsArray.length()) {
+                                val step = stepsArray.getJSONObject(stepIndex)
+                                add(
+                                    ExerciseStepReport(
+                                        stepId = step.optString("stepId"),
+                                        title = step.optString("title"),
+                                        score = step.optInt("score").coerceIn(0, 100),
+                                        attempts = step.optInt("attempts", 1).coerceAtLeast(1),
+                                        analysisType = step.optString(
+                                            "analysisType",
+                                            ExerciseAnalysisType.INTERACTION,
+                                        ),
+                                        targetText = step.optString("targetText"),
+                                        recognizedText = step.optString("recognizedText"),
+                                        feedback = step.optString("feedback"),
+                                        mouthOpeningPercent = step.optInt("mouthOpeningPercent", -1),
+                                        lipRoundingPercent = step.optInt("lipRoundingPercent", -1),
+                                        holdSeconds = step.optInt("holdSeconds", 0).coerceAtLeast(0),
+                                    ),
+                                )
+                            }
+                        }
+                        add(
+                            ExerciseSessionReport(
+                                sessionId = item.optString("sessionId"),
+                                activityId = item.optString("activityId"),
+                                activityTitle = item.optString("activityTitle"),
+                                levelId = item.optInt("levelId"),
+                                levelTitle = item.optString("levelTitle"),
+                                completedAt = item.optLong("completedAt"),
+                                durationSeconds = item.optLong("durationSeconds").coerceAtLeast(1L),
+                                score = item.optInt("score").coerceIn(0, 100),
+                                attemptNumber = item.optInt("attemptNumber", 1).coerceAtLeast(1),
+                                source = item.optString("source", ExerciseSessionSource.LESSON),
+                                steps = steps,
+                            ),
+                        )
+                    }
+                }.filter { it.sessionId.isNotBlank() }.sortedByDescending { it.completedAt }
+            }.getOrDefault(emptyList())
+        }
+
+    fun saveExerciseSessionReport(report: ExerciseSessionReport) {
+        val updated = exerciseSessionReports
+            .filterNot { it.sessionId == report.sessionId }
+            .plus(report)
+            .sortedByDescending { it.completedAt }
+            .take(MAX_EXERCISE_REPORTS)
+        persistExerciseSessionReports(updated)
+        revision += 1
+    }
+
+    fun mergeExerciseSessionReports(remote: List<ExerciseSessionReport>) {
+        if (remote.isEmpty()) return
+        val merged = (exerciseSessionReports + remote)
+            .groupBy { it.sessionId }
+            .mapNotNull { (_, entries) -> entries.maxByOrNull { it.completedAt } }
+            .sortedByDescending { it.completedAt }
+            .take(MAX_EXERCISE_REPORTS)
+        persistExerciseSessionReports(merged)
+        revision += 1
+    }
+
+    private fun persistExerciseSessionReports(entries: List<ExerciseSessionReport>) {
+        val array = JSONArray()
+        entries.forEach { entry ->
+            val steps = JSONArray()
+            entry.steps.forEach { step ->
+                steps.put(
+                    JSONObject()
+                        .put("stepId", step.stepId)
+                        .put("title", step.title)
+                        .put("score", step.score)
+                        .put("attempts", step.attempts)
+                        .put("analysisType", step.analysisType)
+                        .put("targetText", step.targetText)
+                        .put("recognizedText", step.recognizedText)
+                        .put("feedback", step.feedback)
+                        .put("mouthOpeningPercent", step.mouthOpeningPercent)
+                        .put("lipRoundingPercent", step.lipRoundingPercent)
+                        .put("holdSeconds", step.holdSeconds),
+                )
+            }
+            array.put(
+                JSONObject()
+                    .put("sessionId", entry.sessionId)
+                    .put("activityId", entry.activityId)
+                    .put("activityTitle", entry.activityTitle)
+                    .put("levelId", entry.levelId)
+                    .put("levelTitle", entry.levelTitle)
+                    .put("completedAt", entry.completedAt)
+                    .put("durationSeconds", entry.durationSeconds)
+                    .put("score", entry.score)
+                    .put("attemptNumber", entry.attemptNumber)
+                    .put("source", entry.source)
+                    .put("steps", steps),
+            )
+        }
+        preferences.edit().putString(KEY_EXERCISE_REPORTS, array.toString()).apply()
+    }
+
     val parentReflections: List<ParentReflection>
         get() {
             val source = preferences.getString(KEY_PARENT_REFLECTIONS, "[]").orEmpty()
@@ -249,7 +360,9 @@ class ProgressRepository(context: Context, uid: String) {
         private const val KEY_SOUND_SCORES = "assessed_sound_scores"
         private const val KEY_LAST_ASSESSMENT_AT = "last_assessment_at"
         private const val KEY_PARENT_REFLECTIONS = "parent_reflections"
+        private const val KEY_EXERCISE_REPORTS = "exercise_session_reports"
         private const val MAX_PARENT_REFLECTIONS = 90
+        private const val MAX_EXERCISE_REPORTS = 180
     }
 }
 

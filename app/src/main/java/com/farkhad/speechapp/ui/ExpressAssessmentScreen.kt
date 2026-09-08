@@ -27,8 +27,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.EmojiEvents
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.RecordVoiceOver
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -59,6 +65,10 @@ import com.farkhad.speechapp.assessment.SpeechAssessmentEngine
 import com.farkhad.speechapp.assessment.SpeechProfile
 import com.farkhad.speechapp.assessment.SoundMapEngine
 import com.farkhad.speechapp.audio.SpeechAudio
+import com.farkhad.speechapp.data.ExerciseAnalysisType
+import com.farkhad.speechapp.data.ExerciseSessionReport
+import com.farkhad.speechapp.data.ExerciseSessionSource
+import com.farkhad.speechapp.data.ExerciseStepReport
 import com.farkhad.speechapp.data.ProgressRepository
 import com.farkhad.speechapp.ui.theme.AppBackground
 import com.farkhad.speechapp.ui.theme.AppBlue
@@ -82,14 +92,21 @@ fun ExpressAssessmentScreen(
     audio: SpeechAudio,
     progress: ProgressRepository,
     onBack: () -> Unit,
+    onReport: (ExerciseSessionReport) -> Unit = {},
 ) {
     var stageName by rememberSaveable { mutableStateOf(AssessmentStage.INTRO.name) }
+    var assessmentStartedAt by rememberSaveable { mutableStateOf(System.currentTimeMillis()) }
+    var reportSaved by rememberSaveable { mutableStateOf(false) }
     val attempts = remember { mutableStateListOf<AssessmentAttempt>() }
     val stage = AssessmentStage.valueOf(stageName)
 
     when (stage) {
         AssessmentStage.INTRO -> AssessmentIntro(
-            onStart = { stageName = AssessmentStage.SPEECH.name },
+            onStart = {
+                assessmentStartedAt = System.currentTimeMillis()
+                reportSaved = false
+                stageName = AssessmentStage.SPEECH.name
+            },
             onBack = onBack,
         )
 
@@ -110,6 +127,48 @@ fun ExpressAssessmentScreen(
                 progress.saveAssessedSoundScores(SoundMapEngine.scoresFrom(attempts))
                 stageName = AssessmentStage.RESULT.name
             },
+            onAnalysisCompleted = { faceSteps, _ ->
+                if (!reportSaved) {
+                    reportSaved = true
+                    val completedAt = System.currentTimeMillis()
+                    val speechSteps = attempts.map { attempt ->
+                        ExerciseStepReport(
+                            stepId = "assessment_${attempt.prompt.id}",
+                            title = attempt.prompt.text,
+                            score = attempt.score,
+                            attempts = 1,
+                            analysisType = ExerciseAnalysisType.AUDIO,
+                            targetText = attempt.prompt.text,
+                            recognizedText = attempt.recognizedText,
+                            feedback = if (attempt.score >= 85) {
+                                "Сөз анық танылды"
+                            } else {
+                                "Қайталап жаттықтыру ұсынылады"
+                            },
+                        )
+                    }
+                    val allSteps = speechSteps + faceSteps
+                    onReport(
+                        ExerciseSessionReport(
+                            sessionId = "${completedAt}_speech_check",
+                            activityId = "speech_check",
+                            activityTitle = "Сөйлеуді тексеру",
+                            levelId = 0,
+                            levelTitle = "Экспресс-бағалау",
+                            completedAt = completedAt,
+                            durationSeconds = ((completedAt - assessmentStartedAt) / 1000L)
+                                .coerceAtLeast(1L),
+                            score = allSteps.map { it.score }.average()
+                                .takeIf { !it.isNaN() }?.toInt() ?: 0,
+                            attemptNumber = progress.exerciseSessionReports.count {
+                                it.activityId == "speech_check"
+                            } + 1,
+                            source = ExerciseSessionSource.ASSESSMENT,
+                            steps = allSteps,
+                        ),
+                    )
+                }
+            },
         )
 
         AssessmentStage.RESULT -> AssessmentResult(
@@ -118,6 +177,7 @@ fun ExpressAssessmentScreen(
             onFinish = onBack,
             onRepeat = {
                 attempts.clear()
+                reportSaved = false
                 stageName = AssessmentStage.INTRO.name
             },
         )
@@ -381,7 +441,12 @@ private fun SpeechAssessmentStep(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(prompt.kindLabel, color = AppPurple, fontWeight = FontWeight.Bold)
-                    Text(prompt.emoji, modifier = Modifier.padding(top = 14.dp), fontSize = 54.sp)
+                    Icon(
+                        Icons.Outlined.RecordVoiceOver,
+                        contentDescription = null,
+                        tint = AppRed,
+                        modifier = Modifier.padding(top = 14.dp).size(48.dp),
+                    )
                     Text(
                         prompt.text,
                         modifier = Modifier.padding(top = 10.dp),
@@ -395,7 +460,9 @@ private fun SpeechAssessmentStep(
                         modifier = Modifier.padding(top = 18.dp),
                         shape = RoundedCornerShape(50),
                     ) {
-                        Text("🔊 Тыңдау / Послушать")
+                        Icon(Icons.Outlined.VolumeUp, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.size(6.dp))
+                        Text("Тыңдау / Послушать")
                     }
                 }
             }
@@ -414,7 +481,12 @@ private fun SpeechAssessmentStep(
                 shadowElevation = 12.dp,
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Text(if (listening) "●" else "🎤", color = Color.White, fontSize = 40.sp)
+                    Icon(
+                        Icons.Outlined.Mic,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(if (listening) 43.dp else 38.dp),
+                    )
                 }
             }
             Text(
@@ -530,7 +602,12 @@ private fun AssessmentResult(
                 .padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("🏆", fontSize = 52.sp)
+            Icon(
+                Icons.Outlined.EmojiEvents,
+                contentDescription = null,
+                tint = AppRed,
+                modifier = Modifier.size(48.dp),
+            )
             Text(
                 profile.levelTitle,
                 color = AppText,
@@ -556,7 +633,7 @@ private fun AssessmentResult(
             }
 
             ProfileSection(
-                title = "✅ Күшті жақтар / Сильные стороны",
+                title = "Күшті жақтар / Сильные стороны",
                 text = if (profile.strongSounds.isEmpty()) {
                     "Тапсырмалар орындалды / Задания выполнены"
                 } else {
@@ -565,7 +642,7 @@ private fun AssessmentResult(
                 color = AppGreen,
             )
             ProfileSection(
-                title = "🎯 Назар аударатын дыбыстар / Звуки для тренировки",
+                title = "Назар аударатын дыбыстар / Звуки для тренировки",
                 text = if (profile.focusSounds.isEmpty()) {
                     "Айқын қиындық табылған жоқ / Явных трудностей не найдено"
                 } else {
@@ -574,7 +651,7 @@ private fun AssessmentResult(
                 color = AppOrange,
             )
             ProfileSection(
-                title = "✨ Ұсыныс / Рекомендация",
+                title = "Ұсыныс / Рекомендация",
                 text = profile.recommendation,
                 color = AppPurple,
             )
@@ -595,7 +672,20 @@ private fun AssessmentResult(
                                 .padding(top = 10.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            Text("${attempt.prompt.emoji} ${attempt.prompt.text}", color = AppText, fontSize = 12.sp)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Outlined.RecordVoiceOver,
+                                    contentDescription = null,
+                                    tint = AppRed,
+                                    modifier = Modifier.size(17.dp),
+                                )
+                                Text(
+                                    attempt.prompt.text,
+                                    modifier = Modifier.padding(start = 7.dp),
+                                    color = AppText,
+                                    fontSize = 12.sp,
+                                )
+                            }
                             Text("${attempt.score}%", color = AppPurple, fontWeight = FontWeight.Black)
                         }
                     }
@@ -605,7 +695,7 @@ private fun AssessmentResult(
                             .padding(top = 10.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Text("✨ Face Map", color = AppText, fontSize = 12.sp)
+                        Text("Face Map", color = AppText, fontSize = 12.sp)
                         Text("Орындалды / Готово", color = AppGreen, fontWeight = FontWeight.Black, fontSize = 12.sp)
                     }
                 }
