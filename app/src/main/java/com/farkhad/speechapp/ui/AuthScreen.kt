@@ -2,20 +2,28 @@
 
 package com.farkhad.speechapp.ui
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -26,6 +34,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -34,18 +45,29 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.farkhad.speechapp.data.AuthenticatedUser
+import com.farkhad.speechapp.ui.theme.AppBackground
+import com.farkhad.speechapp.ui.theme.AppBlue
+import com.farkhad.speechapp.ui.theme.AppGreen
+import com.farkhad.speechapp.ui.theme.AppNavy
+import com.farkhad.speechapp.ui.theme.AppOutline
+import com.farkhad.speechapp.ui.theme.AppRed
+import com.farkhad.speechapp.ui.theme.AppSurfaceMuted
+import com.farkhad.speechapp.ui.theme.AppText
 
 @Composable
 fun AuthLoadingScreen() {
-    Surface(modifier = Modifier.fillMaxSize()) {
+    Surface(modifier = Modifier.fillMaxSize(), color = AppBackground) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator()
-                Spacer(modifier = Modifier.height(18.dp))
+                AuthBrandMark()
+                Spacer(modifier = Modifier.height(28.dp))
+                CircularProgressIndicator(color = AppRed, strokeWidth = 2.dp)
+                Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = "Аккаунт тексерілуде\nПроверяем аккаунт",
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.bodyLarge,
+                    color = AppText.copy(alpha = 0.68f),
                 )
             }
         }
@@ -54,37 +76,76 @@ fun AuthLoadingScreen() {
 
 @Composable
 fun AuthScreen(viewModel: AuthViewModel) {
-    Surface(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().background(AppBackground)) {
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(3.dp)
+                .padding(top = 22.dp, bottom = 22.dp)
+                .background(AppRed),
+        )
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 32.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .padding(start = 26.dp, end = 22.dp, top = 30.dp, bottom = 26.dp),
+            horizontalAlignment = Alignment.Start,
         ) {
+            AuthBrandMark()
+
+            Spacer(modifier = Modifier.height(42.dp))
             Text(
-                text = if (viewModel.isSignUpMode) {
-                    "Ата-ана аккаунтын құру"
-                } else {
-                    "Қайта оралуыңызбен!"
-                },
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
+                text = "БАЛАҢЫЗБЕН БІРГЕ",
+                color = AppRed,
+                style = MaterialTheme.typography.labelSmall,
+                letterSpacing = 0.8.sp,
             )
             Text(
-                text = if (viewModel.isSignUpMode) {
-                    "Регистрация родительского аккаунта"
-                } else {
-                    "Войдите в родительский аккаунт"
-                },
+                text = "Әр сөзге\nқуана қараймыз.",
                 modifier = Modifier.padding(top = 8.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
+                color = AppText,
+                style = MaterialTheme.typography.headlineLarge,
+                fontSize = 41.sp,
+                lineHeight = 44.sp,
+            )
+            Text(
+                text = "Қазақша тыңдаймыз, қайталаймыз және сөйлесеміз. Сіз әр кішкентай жетістікті көріп отырасыз.",
+                modifier = Modifier.padding(top = 14.dp),
+                color = AppText.copy(alpha = 0.62f),
+                style = MaterialTheme.typography.bodyMedium,
             )
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Surface(
+                modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+                color = AppNavy,
+                shape = RoundedCornerShape(2.dp),
+            ) {
+                Text(
+                    "Ә   Ғ   Қ   Ң   Ө   Ұ   Ү   І",
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+                    color = Color(0xFFF3EFE3),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.4.sp,
+                )
+            }
+
+            Text(
+                text = if (viewModel.isSignUpMode) "Отбасы үшін аккаунт ашу" else "Қош келдіңіз",
+                modifier = Modifier.padding(top = 34.dp),
+                color = AppText,
+                style = MaterialTheme.typography.titleLarge,
+            )
+            Text(
+                text = if (viewModel.isSignUpMode) {
+                    "Прогресті құрылғылар арасында сақтау үшін аккаунт жасаңыз."
+                } else {
+                    "Баланың жеке маршрутын жалғастырыңыз."
+                },
+                modifier = Modifier.padding(top = 6.dp, bottom = 16.dp),
+                color = AppText.copy(alpha = 0.60f),
+                style = MaterialTheme.typography.bodySmall,
+            )
 
             OutlinedTextField(
                 value = viewModel.email,
@@ -94,11 +155,10 @@ fun AuthScreen(viewModel: AuthViewModel) {
                 supportingText = viewModel.emailError?.let { message -> { Text(message) } },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 singleLine = true,
+                shape = RoundedCornerShape(4.dp),
                 modifier = Modifier.fillMaxWidth(),
             )
-
             Spacer(modifier = Modifier.height(10.dp))
-
             PasswordField(
                 value = viewModel.password,
                 onValueChange = viewModel::onPasswordChanged,
@@ -113,7 +173,6 @@ fun AuthScreen(viewModel: AuthViewModel) {
                     Spacer(modifier = Modifier.height(12.dp))
                     MessageText(message, isError = true)
                 }
-
             viewModel.authNoticeMessage?.let { message ->
                 Spacer(modifier = Modifier.height(12.dp))
                 MessageText(message, isError = false)
@@ -124,7 +183,7 @@ fun AuthScreen(viewModel: AuthViewModel) {
                     onClick = viewModel::openPasswordResetDialog,
                     modifier = Modifier.align(Alignment.End),
                 ) {
-                    Text("Құпия сөзді ұмыттыңыз ба? / Забыли пароль?")
+                    Text("Құпия сөзді ұмыттыңыз ба? / Забыли пароль?", fontSize = 12.sp)
                 }
             } else {
                 Spacer(modifier = Modifier.height(16.dp))
@@ -132,18 +191,14 @@ fun AuthScreen(viewModel: AuthViewModel) {
 
             Button(
                 onClick = viewModel::authenticate,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().height(54.dp),
+                shape = RoundedCornerShape(4.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AppNavy),
             ) {
                 Text(
-                    if (viewModel.isSignUpMode) {
-                        "Тіркелу / Зарегистрироваться"
-                    } else {
-                        "Кіру / Войти"
-                    },
+                    if (viewModel.isSignUpMode) "Тіркелу / Зарегистрироваться" else "Кіру / Войти",
                 )
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
 
             TextButton(onClick = viewModel::toggleAuthenticationMode) {
                 Text(
@@ -152,31 +207,63 @@ fun AuthScreen(viewModel: AuthViewModel) {
                     } else {
                         "Аккаунт жоқ па? Тіркелу / Нет аккаунта? Регистрация"
                     },
-                    textAlign = TextAlign.Center,
+                    textAlign = TextAlign.Start,
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            androidx.compose.material3.Divider(
+                modifier = Modifier.padding(top = 10.dp, bottom = 18.dp),
+                color = AppOutline,
+            )
+            Text(
+                "Алдымен көріп шығуға болады",
+                color = AppRed,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+            )
             OutlinedButton(
                 onClick = viewModel::enterDemoMode,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().height(50.dp).padding(top = 8.dp),
+                shape = RoundedCornerShape(4.dp),
+                border = BorderStroke(1.dp, AppText.copy(alpha = 0.45f)),
             ) {
-                Text(
-                    "✨ Презентациялық демо / Демо без аккаунта",
-                    textAlign = TextAlign.Center,
-                )
+                Text("Аккаунтсыз демо / Демо без аккаунта")
             }
             Text(
-                text = "Демо прогресі тек осы құрылғыда сақталады / Демо-прогресс хранится только на устройстве",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelSmall,
-                textAlign = TextAlign.Center,
+                text = "Деректер қорғалған. Бағалау медициналық диагноз болып саналмайды.",
+                modifier = Modifier.padding(top = 18.dp),
+                color = AppText.copy(alpha = 0.48f),
+                style = MaterialTheme.typography.bodySmall,
             )
         }
     }
 
     if (viewModel.isPasswordResetDialogVisible) {
         PasswordResetDialog(viewModel)
+    }
+}
+
+@Composable
+private fun AuthBrandMark() {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.width(4.dp).height(38.dp).background(AppRed))
+        Column(modifier = Modifier.padding(start = 11.dp)) {
+            Text(
+                "SÓYLE",
+                color = AppText,
+                fontSize = 19.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.8.sp,
+            )
+            Text(
+                "БАЛАМЕН БІРГЕ СӨЙЛЕСЕМІЗ",
+                modifier = Modifier.padding(top = 1.dp),
+                color = AppText.copy(alpha = 0.50f),
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.8.sp,
+            )
+        }
     }
 }
 
@@ -398,6 +485,7 @@ private fun PasswordField(
         enabled = enabled,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
         singleLine = true,
+        shape = RoundedCornerShape(4.dp),
         visualTransformation = if (isVisible) {
             VisualTransformation.None
         } else {

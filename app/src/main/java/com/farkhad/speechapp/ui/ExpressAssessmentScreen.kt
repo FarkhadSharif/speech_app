@@ -65,6 +65,9 @@ import com.farkhad.speechapp.ui.theme.AppBlue
 import com.farkhad.speechapp.ui.theme.AppGreen
 import com.farkhad.speechapp.ui.theme.AppOrange
 import com.farkhad.speechapp.ui.theme.AppPurple
+import com.farkhad.speechapp.ui.theme.AppNavy
+import com.farkhad.speechapp.ui.theme.AppOutline
+import com.farkhad.speechapp.ui.theme.AppRed
 import com.farkhad.speechapp.ui.theme.AppText
 
 private enum class AssessmentStage {
@@ -129,14 +132,10 @@ private fun AssessmentIntro(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFF102A56), Color(0xFF176AA0), AppPurple),
-                ),
-            )
+            .background(AppBackground)
             .statusBarsPadding()
             .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        horizontalAlignment = Alignment.Start,
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -146,44 +145,42 @@ private fun AssessmentIntro(
             Text(
                 "Экспресс-бағалау",
                 modifier = Modifier.padding(start = 14.dp),
-                color = Color.White,
+                color = AppText,
                 fontWeight = FontWeight.ExtraBold,
                 fontSize = 20.sp,
             )
         }
 
         Spacer(modifier = Modifier.weight(1f))
-        Surface(
-            modifier = Modifier.size(126.dp),
-            shape = CircleShape,
-            color = Color.White.copy(alpha = 0.14f),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text("🎙️", fontSize = 62.sp)
-            }
-        }
-        Spacer(modifier = Modifier.height(24.dp))
         Text(
-            "Сөйлеуді тексеру\nПроверить речь",
-            color = Color.White,
-            fontWeight = FontWeight.Black,
-            fontSize = 31.sp,
-            lineHeight = 37.sp,
-            textAlign = TextAlign.Center,
+            "01  /  БАҒАЛАУ",
+            color = AppRed,
+            fontWeight = FontWeight.Bold,
+            fontSize = 11.sp,
+            letterSpacing = 1.sp,
         )
         Text(
-            "4 сөйлеу тапсырмасы + Face Map",
+            "Сөйлеуді\nтексеру",
+            modifier = Modifier.padding(top = 9.dp),
+            color = AppText,
+            fontWeight = FontWeight.Bold,
+            fontSize = 36.sp,
+            lineHeight = 41.sp,
+        )
+        Text(
+            "4 сөйлеу тапсырмасы  ·  Face Map  ·  шамамен 60 секунд",
             modifier = Modifier.padding(top = 12.dp),
-            color = Color.White.copy(alpha = 0.78f),
-            fontSize = 15.sp,
+            color = AppText.copy(alpha = 0.58f),
+            fontSize = 13.sp,
         )
 
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 28.dp),
-            color = Color.White.copy(alpha = 0.12f),
-            shape = RoundedCornerShape(22.dp),
+            color = Color.Transparent,
+            shape = RoundedCornerShape(0.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, AppOutline),
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 AssessmentIntroRow("1", "Сөздерді тыңдап, қайталаңыз / Повторите слова")
@@ -198,15 +195,15 @@ private fun AssessmentIntro(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(58.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = AppOrange),
-            shape = RoundedCornerShape(18.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = AppNavy),
+            shape = RoundedCornerShape(4.dp),
         ) {
             Text("Бастау / Начать", fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
         }
         Text(
             "Бұл медициналық диагноз емес / Это не медицинская диагностика",
             modifier = Modifier.padding(top = 12.dp),
-            color = Color.White.copy(alpha = 0.55f),
+            color = AppText.copy(alpha = 0.48f),
             fontSize = 10.sp,
             textAlign = TextAlign.Center,
         )
@@ -219,15 +216,11 @@ private fun AssessmentIntroRow(number: String, text: String) {
         modifier = Modifier.padding(vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Surface(shape = CircleShape, color = AppOrange) {
-            Box(modifier = Modifier.size(28.dp), contentAlignment = Alignment.Center) {
-                Text(number, color = Color.White, fontWeight = FontWeight.Black, fontSize = 12.sp)
-            }
-        }
+        Text(number.padStart(2, '0'), color = AppRed, fontWeight = FontWeight.Black, fontSize = 11.sp)
         Text(
             text,
             modifier = Modifier.padding(start = 12.dp),
-            color = Color.White,
+            color = AppText.copy(alpha = 0.76f),
             fontSize = 13.sp,
         )
     }

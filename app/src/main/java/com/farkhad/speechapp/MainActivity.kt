@@ -11,36 +11,39 @@ import com.farkhad.speechapp.ui.AuthViewModel
 import com.farkhad.speechapp.ui.EmailVerificationScreen
 import com.farkhad.speechapp.ui.SignOutEverywhereDialog
 import com.farkhad.speechapp.ui.SpeechApp
+import com.farkhad.speechapp.ui.theme.SpeechAppTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         setContent {
-            val authViewModel: AuthViewModel = viewModel()
+            SpeechAppTheme {
+                val authViewModel: AuthViewModel = viewModel()
 
-            when (val authState = authViewModel.authState) {
-                AuthUiState.Loading -> AuthLoadingScreen()
-                AuthUiState.Unauthenticated,
-                is AuthUiState.Error -> AuthScreen(authViewModel)
-                is AuthUiState.VerificationRequired -> EmailVerificationScreen(
-                    viewModel = authViewModel,
-                    user = authState.user,
-                )
-                AuthUiState.Demo -> SpeechApp(
-                    userId = "local-presentation-demo",
-                    isDemoMode = true,
-                    onSignOut = authViewModel::signOut,
-                )
-                is AuthUiState.Authenticated -> SpeechApp(
-                    userId = authState.user.id,
-                    onSignOut = authViewModel::signOut,
-                    onSignOutEverywhere = authViewModel::openSignOutEverywhereDialog,
-                )
-            }
+                when (val authState = authViewModel.authState) {
+                    AuthUiState.Loading -> AuthLoadingScreen()
+                    AuthUiState.Unauthenticated,
+                    is AuthUiState.Error -> AuthScreen(authViewModel)
+                    is AuthUiState.VerificationRequired -> EmailVerificationScreen(
+                        viewModel = authViewModel,
+                        user = authState.user,
+                    )
+                    AuthUiState.Demo -> SpeechApp(
+                        userId = "local-presentation-demo",
+                        isDemoMode = true,
+                        onSignOut = authViewModel::signOut,
+                    )
+                    is AuthUiState.Authenticated -> SpeechApp(
+                        userId = authState.user.id,
+                        onSignOut = authViewModel::signOut,
+                        onSignOutEverywhere = authViewModel::openSignOutEverywhereDialog,
+                    )
+                }
 
-            if (authViewModel.isSignOutEverywhereDialogVisible) {
-                SignOutEverywhereDialog(authViewModel)
+                if (authViewModel.isSignOutEverywhereDialogVisible) {
+                    SignOutEverywhereDialog(authViewModel)
+                }
             }
         }
     }

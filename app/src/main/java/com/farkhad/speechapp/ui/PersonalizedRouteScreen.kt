@@ -46,6 +46,8 @@ import com.farkhad.speechapp.ui.theme.AppBlue
 import com.farkhad.speechapp.ui.theme.AppGreen
 import com.farkhad.speechapp.ui.theme.AppOrange
 import com.farkhad.speechapp.ui.theme.AppPurple
+import com.farkhad.speechapp.ui.theme.AppNavy
+import com.farkhad.speechapp.ui.theme.AppRed
 import com.farkhad.speechapp.ui.theme.AppText
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -174,19 +176,16 @@ private fun RouteContent(
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(26.dp),
-            shadowElevation = 8.dp,
+            shape = RoundedCornerShape(2.dp),
         ) {
             Box(
                 modifier = Modifier
-                    .background(
-                        Brush.horizontalGradient(listOf(Color(0xFF3953D7), AppPurple)),
-                    )
+                    .background(AppNavy)
                     .padding(20.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("🧭", fontSize = 46.sp)
-                    Column(modifier = Modifier.padding(start = 14.dp)) {
+                    Text("03", color = AppRed, fontSize = 16.sp, fontWeight = FontWeight.Black)
+                    Column(modifier = Modifier.padding(start = 18.dp)) {
                         Text(
                             "Жеке маршрут дайын!",
                             color = Color.White,

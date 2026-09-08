@@ -7,6 +7,8 @@ import androidx.compose.runtime.setValue
 import com.farkhad.speechapp.model.Curriculum
 import com.farkhad.speechapp.model.CurriculumLevel
 import com.farkhad.speechapp.model.GameActivity
+import org.json.JSONArray
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -146,6 +148,82 @@ class ProgressRepository(context: Context, uid: String) {
     val lastAssessmentAt: Long
         get() = preferences.getLong(KEY_LAST_ASSESSMENT_AT, 0L)
 
+    val parentReflections: List<ParentReflection>
+        get() {
+            val source = preferences.getString(KEY_PARENT_REFLECTIONS, "[]").orEmpty()
+            return runCatching {
+                val array = JSONArray(source)
+                buildList {
+                    for (index in 0 until array.length()) {
+                        val item = array.getJSONObject(index)
+                        val winsArray = item.optJSONArray("wins") ?: JSONArray()
+                        val wins = buildSet {
+                            for (winIndex in 0 until winsArray.length()) {
+                                winsArray.optString(winIndex).takeIf { it.isNotBlank() }?.let(::add)
+                            }
+                        }
+                        add(
+                            ParentReflection(
+                                id = item.optLong("id"),
+                                dateKey = item.optString("dateKey"),
+                                createdAt = item.optLong("createdAt"),
+                                engagement = item.optInt("engagement", 3).coerceIn(1, 5),
+                                clarity = item.optInt("clarity", 3).coerceIn(1, 5),
+                                independence = item.optInt("independence", 3).coerceIn(1, 5),
+                                practiceMinutes = item.optInt("practiceMinutes", 5).coerceAtLeast(0),
+                                context = item.optString("context"),
+                                wins = wins,
+                                note = item.optString("note"),
+                                nextStep = item.optString("nextStep"),
+                            ),
+                        )
+                    }
+                }.sortedByDescending { it.createdAt }
+            }.getOrDefault(emptyList())
+        }
+
+    fun saveParentReflection(reflection: ParentReflection) {
+        val updated = parentReflections
+            .filterNot { it.dateKey == reflection.dateKey }
+            .plus(reflection)
+            .sortedByDescending { it.createdAt }
+            .take(MAX_PARENT_REFLECTIONS)
+        persistParentReflections(updated)
+        revision += 1
+    }
+
+    fun mergeParentReflections(remote: List<ParentReflection>) {
+        if (remote.isEmpty()) return
+        val merged = (parentReflections + remote)
+            .groupBy { it.dateKey }
+            .mapNotNull { (_, entries) -> entries.maxByOrNull { it.createdAt } }
+            .sortedByDescending { it.createdAt }
+            .take(MAX_PARENT_REFLECTIONS)
+        persistParentReflections(merged)
+        revision += 1
+    }
+
+    private fun persistParentReflections(entries: List<ParentReflection>) {
+        val array = JSONArray()
+        entries.forEach { entry ->
+            array.put(
+                JSONObject()
+                    .put("id", entry.id)
+                    .put("dateKey", entry.dateKey)
+                    .put("createdAt", entry.createdAt)
+                    .put("engagement", entry.engagement)
+                    .put("clarity", entry.clarity)
+                    .put("independence", entry.independence)
+                    .put("practiceMinutes", entry.practiceMinutes)
+                    .put("context", entry.context)
+                    .put("wins", JSONArray(entry.wins.toList()))
+                    .put("note", entry.note)
+                    .put("nextStep", entry.nextStep),
+            )
+        }
+        preferences.edit().putString(KEY_PARENT_REFLECTIONS, array.toString()).apply()
+    }
+
     fun saveAssessedSoundScores(scores: Map<Char, Int>) {
         val serialized = scores.entries.joinToString(",") { (sound, score) ->
             "$sound:${score.coerceIn(0, 100)}"
@@ -170,6 +248,8 @@ class ProgressRepository(context: Context, uid: String) {
         private const val KEY_LEARNED_WORDS = "learned_words"
         private const val KEY_SOUND_SCORES = "assessed_sound_scores"
         private const val KEY_LAST_ASSESSMENT_AT = "last_assessment_at"
+        private const val KEY_PARENT_REFLECTIONS = "parent_reflections"
+        private const val MAX_PARENT_REFLECTIONS = 90
     }
 }
 

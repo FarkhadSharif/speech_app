@@ -72,6 +72,7 @@ import com.farkhad.speechapp.audio.SpeechAudio
 import com.farkhad.speechapp.audio.rememberSpeechAudio
 import com.farkhad.speechapp.assessment.PersonalizedRouteEngine
 import com.farkhad.speechapp.data.FirebaseRepository
+import com.farkhad.speechapp.data.ParentReflectionEngine
 import com.farkhad.speechapp.data.ProgressRepository
 import com.farkhad.speechapp.model.Curriculum
 import com.farkhad.speechapp.model.CurriculumLevel
@@ -79,6 +80,9 @@ import com.farkhad.speechapp.model.GameActivity
 import com.farkhad.speechapp.model.VocabularyWord
 import com.farkhad.speechapp.ui.theme.*
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private enum class AppScreen {
     Role,
@@ -91,6 +95,7 @@ private enum class AppScreen {
     PersonalizedRoute,
     FaceMap,
     ParentDashboard,
+    ParentReflection,
     Statistics,
     ParentGuide,
     ChildInfo,
@@ -135,6 +140,9 @@ fun SpeechApp(
             // Sync learned words from Firebase
             repository?.getLearnedWords()?.onSuccess { wordIds ->
                 progress.updateLearnedWords(wordIds)
+            }
+            repository?.getParentReflections()?.onSuccess { reflections ->
+                progress.mergeParentReflections(reflections)
             }
         }
     }
@@ -277,9 +285,17 @@ fun SpeechApp(
                 progress = progress,
                 progressRevision = progressRevision,
                 onBack = { navigate(AppScreen.Role) },
+                onReflection = { navigate(AppScreen.ParentReflection) },
                 onStatistics = { navigate(AppScreen.Statistics) },
                 onGuide = { navigate(AppScreen.ParentGuide) },
                 onChildInfo = { navigate(AppScreen.ChildInfo) }
+            )
+
+            AppScreen.ParentReflection -> ParentReflectionScreen(
+                progress = progress,
+                progressRevision = progressRevision,
+                repository = repository,
+                onBack = { navigate(AppScreen.ParentDashboard) },
             )
 
             AppScreen.Statistics -> StatisticsScreen(
@@ -364,118 +380,181 @@ private fun RoleSelectionScreen(
     onSignOutEverywhere: () -> Unit,
     isDemoMode: Boolean,
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        NetworkImageBackground(
-            url = "https://images.unsplash.com/photo-1542332213-9b5a5a3fad35?auto=format&fit=crop&q=80&w=1000",
-            overlayColor = Color.Black.copy(alpha = 0.3f)
-        )
-        KazakhPatternBackground(color = Color.White.copy(alpha = 0.15f))
-        
-        Column(
+    Box(modifier = Modifier.fillMaxSize().background(AppBackground)) {
+        Box(
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .statusBarsPadding()
-                .padding(16.dp),
-        ) {
-            OutlinedButton(
-                onClick = onSignOut,
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f)),
-            ) {
-                Text(if (isDemoMode) "Демодан шығу" else "Шығу / Выйти")
-            }
-            if (!isDemoMode) {
-                TextButton(
-                    onClick = onSignOutEverywhere,
-                    modifier = Modifier.align(Alignment.End),
-                    colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
-                ) {
-                    Text(
-                        text = "Барлық құрылғылардан\nНа всех устройствах",
-                        fontSize = 11.sp,
-                        textAlign = TextAlign.End,
-                    )
-                }
-            }
-        }
-
+                .fillMaxHeight()
+                .width(3.dp)
+                .padding(top = 18.dp, bottom = 18.dp)
+                .background(AppRed),
+        )
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .padding(horizontal = 30.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .verticalScroll(rememberScrollState())
+                .padding(start = 26.dp, end = 22.dp, top = 20.dp, bottom = 20.dp),
         ) {
-            Spacer(modifier = Modifier.fillMaxHeight(0.11f))
-            Box(
-                modifier = Modifier
-                    .size(104.dp)
-                    .clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(AppBlue, Color(0xFF65C7FF)))),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("🗣️", fontSize = 54.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column {
+                    Text(
+                        "SÓYLE",
+                        color = AppText,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.8.sp,
+                    )
+                    Text(
+                        "БАЛАМЕН БІРГЕ СӨЙЛЕСЕМІЗ",
+                        color = AppText.copy(alpha = 0.48f),
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.7.sp,
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                TextButton(
+                    onClick = onSignOut,
+                    colors = ButtonDefaults.textButtonColors(contentColor = AppText.copy(alpha = 0.62f)),
+                ) {
+                    Text(
+                        if (isDemoMode) "Демодан шығу" else "Шығу",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
-            Spacer(modifier = Modifier.height(18.dp))
+
+            Box(modifier = Modifier.fillMaxWidth().height(196.dp).padding(top = 24.dp)) {
+                Column(modifier = Modifier.align(Alignment.TopStart)) {
+                    Text(
+                        "БҮГІН БІРГЕ ЖАТТЫҒАМЫЗ",
+                        color = AppRed,
+                        style = MaterialTheme.typography.labelSmall,
+                        letterSpacing = 0.9.sp,
+                    )
+                    Text(
+                        "Тыңдаймыз.\nҚайталаймыз.\nСөйлесеміз.",
+                        modifier = Modifier.padding(top = 8.dp),
+                        color = AppText,
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontSize = 36.sp,
+                        lineHeight = 40.sp,
+                    )
+                }
+                Text(
+                    "Ә",
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                    color = AppRed.copy(alpha = 0.16f),
+                    fontSize = 126.sp,
+                    fontWeight = FontWeight.Normal,
+                )
+            }
+
             Text(
-                text = "Сөйле",
-                color = Color.White,
-                style = MaterialTheme.typography.headlineLarge,
+                "Балаға — қысқа әрі түсінікті жаттығу. Ата-анаға — нақты динамика мен келесі қадам.",
+                modifier = Modifier.fillMaxWidth(0.86f),
+                color = AppText.copy(alpha = 0.64f),
+                style = MaterialTheme.typography.bodyMedium,
             )
+
+            Surface(
+                modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+                color = AppNavy,
+                shape = RoundedCornerShape(2.dp),
+            ) {
+                Text(
+                    "Ә   Ғ   Қ   Ң   Ө   Ұ   Ү   І",
+                    modifier = Modifier.padding(horizontal = 17.dp, vertical = 12.dp),
+                    color = AppBackground,
+                    fontSize = 16.sp,
+                    letterSpacing = 1.1.sp,
+                )
+            }
+
             Text(
-                text = "Тыңда • ойна • сөйле • әңгімеле",
-                modifier = Modifier.padding(top = 8.dp),
-                color = Color.White.copy(alpha = 0.8f),
-                fontSize = 15.sp,
-                textAlign = TextAlign.Center,
-                fontWeight = FontWeight.Bold
+                "Кім жалғастырады?",
+                modifier = Modifier.padding(top = 28.dp, bottom = 10.dp),
+                color = AppText,
+                style = MaterialTheme.typography.titleLarge,
             )
-            Spacer(modifier = Modifier.height(38.dp))
             RoleButton(
-                text = "🧒  Балалар Әлемі",
-                subtitle = "Ойын арқылы үйрену",
-                color = AppOrange,
+                symbol = "Б",
+                title = "Балаға арналған бөлім",
+                subtitle = "Ойындар · дыбыстар · жеке маршрут",
+                color = AppRed,
                 onClick = onChild,
             )
-            Spacer(modifier = Modifier.height(16.dp))
             RoleButton(
-                text = "👪  Ата-ана бұрышы",
-                subtitle = "Даму статистикасы",
-                color = AppGreen,
+                symbol = "А",
+                title = "Ата-анаға арналған бөлім",
+                subtitle = "Нәтижелер · динамика · ұсыныстар",
+                color = AppBlue,
                 onClick = onParent,
             )
-            Spacer(modifier = Modifier.height(28.dp))
+
+            Divider(modifier = Modifier.padding(top = 18.dp), color = AppOutline)
             Text(
-                text = "Қазақша білім беру қосымшасы",
-                color = Color.White.copy(alpha = 0.6f),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
+                "Деректер ата-ана аккаунтымен қорғалған. Қосымша медициналық диагноз қоймайды.",
+                modifier = Modifier.padding(top = 12.dp),
+                color = AppText.copy(alpha = 0.50f),
+                style = MaterialTheme.typography.bodySmall,
             )
+            if (!isDemoMode) {
+                TextButton(
+                    onClick = onSignOutEverywhere,
+                    modifier = Modifier.padding(top = 2.dp),
+                    colors = ButtonDefaults.textButtonColors(contentColor = AppText.copy(alpha = 0.58f)),
+                ) {
+                    Text("Барлық құрылғылардан шығу / Выйти везде", fontSize = 11.sp)
+                }
+            } else {
+                Spacer(modifier = Modifier.height(14.dp))
+            }
         }
     }
 }
 
 @Composable
 private fun RoleButton(
-    text: String,
+    symbol: String,
+    title: String,
     subtitle: String,
     color: Color,
     onClick: () -> Unit,
 ) {
-    Button(
-        onClick = onClick,
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(72.dp),
-        shape = RoundedCornerShape(20.dp),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 5.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = color),
-        contentPadding = PaddingValues(horizontal = 20.dp),
+            .height(82.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(0.dp),
+        color = Color.Transparent,
+        border = BorderStroke(1.dp, AppOutline),
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
-            Text(subtitle, color = Color.White.copy(alpha = 0.82f), fontSize = 12.sp)
+        Row(
+            modifier = Modifier.padding(horizontal = 15.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                symbol,
+                modifier = Modifier.width(42.dp),
+                color = color,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 0.7.sp,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, color = AppText, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                Text(
+                    subtitle,
+                    modifier = Modifier.padding(top = 3.dp),
+                    color = AppText.copy(alpha = 0.54f),
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                )
+            }
+            Text("Кіру", color = color, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -499,22 +578,20 @@ private fun ChildHomeScreen(
         PersonalizedRouteEngine.build(progress.assessedSoundScores)
     }
     
-    Box(modifier = Modifier.fillMaxSize().background(AppBackground)) {
-        NetworkImageBackground(
-            url = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&q=80&w=1000",
-            alpha = 0.15f
-        )
-        KazakhPatternBackground(color = AppBlue.copy(alpha = 0.05f))
-        
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(AppBackground),
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding(),
         ) {
             AppTopBar(
-                title = "Сөйлеу Саяхаты",
+                title = "Баланың жеке бағдары",
                 onBack = null,
-                trailing = "🏠",
+                trailing = "ҮЙ",
                 onTrailing = onBack,
             )
             
@@ -525,179 +602,136 @@ private fun ChildHomeScreen(
                     unlockAll = isDemoMode,
                     onOpenLevel = onOpenLevel
                 )
-                
+
                 Column(
                     modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 24.dp)
-                        .padding(horizontal = 24.dp)
-                        .fillMaxWidth(),
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 12.dp),
                 ) {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(88.dp)
-                            .clip(RoundedCornerShape(24.dp))
-                            .clickable(onClick = onOpenTraining),
-                        color = Color(0xFF3953D7),
-                        shadowElevation = 12.dp,
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 18.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text("🧭", fontSize = 36.sp)
-                            Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
-                                Text(
-                                    "Твоя тренировка сегодня",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 17.sp,
-                                )
-                                Text(
-                                    if (trainingRoute.needsAssessment) {
-                                        "Алдымен экспресс-бағалаудан өт"
-                                    } else {
-                                        "Дыбыстар: ${trainingRoute.focusSounds.joinToString(" • ") { it.uppercase() }}  ·  ${trainingRoute.activities.size} ойын"
-                                    },
-                                    color = Color.White.copy(alpha = 0.80f),
-                                    fontSize = 11.sp,
-                                )
-                            }
-                            Surface(color = AppOrange, shape = RoundedCornerShape(50)) {
-                                Text(
-                                    "СТАРТ",
-                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 9.sp,
-                                )
-                            }
-                        }
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Text("${progress.totalStars} жұлдыз", color = AppRed, style = MaterialTheme.typography.labelSmall)
+                        Text("${progress.totalSessions} жаттығу", color = AppText.copy(alpha = 0.54f), style = MaterialTheme.typography.labelSmall)
+                        Text("${progress.activeDays} белсенді күн", color = AppText.copy(alpha = 0.54f), style = MaterialTheme.typography.labelSmall)
                     }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(78.dp)
-                            .clip(RoundedCornerShape(24.dp))
-                            .clickable(onClick = onOpenAssessment),
-                        color = AppBlue,
-                        shadowElevation = 12.dp,
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 18.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text("🎙️", fontSize = 34.sp)
-                            Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
-                                Text(
-                                    "Сөйлеуді тексеру",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 18.sp,
-                                )
-                                Text(
-                                    "Экспресс-оценка речи + Face Map",
-                                    color = Color.White.copy(alpha = 0.82f),
-                                    fontSize = 11.sp,
-                                )
-                            }
-                            Surface(color = AppOrange, shape = RoundedCornerShape(50)) {
-                                Text(
-                                    "60 сек",
-                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 10.sp,
-                                )
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(72.dp)
-                            .clip(RoundedCornerShape(24.dp))
-                            .clickable(onClick = onOpenFaceMap),
-                        color = AppPurple,
-                        shadowElevation = 10.dp,
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 18.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text("✨", fontSize = 30.sp)
-                            Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
-                                Text(
-                                    "Face Map",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 18.sp,
-                                )
-                                Text(
-                                    "Жаңа артикуляциялық айна",
-                                    color = Color.White.copy(alpha = 0.78f),
-                                    fontSize = 11.sp,
-                                )
-                            }
-                            Surface(color = AppOrange, shape = RoundedCornerShape(50)) {
-                                Text(
-                                    "NEW",
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 10.sp,
-                                )
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Surface(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(58.dp)
-                                .clip(RoundedCornerShape(20.dp))
-                                .clickable(onClick = onOpenSoundMap),
-                            color = AppOrange,
-                            shadowElevation = 8.dp,
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    "🎯 Дыбыстар",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 14.sp,
-                                )
-                            }
-                        }
-                        Surface(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(58.dp)
-                                .clip(RoundedCornerShape(20.dp))
-                                .clickable(onClick = onOpenWords),
-                            color = AppGreen,
-                            shadowElevation = 8.dp,
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    "🔊 Сөздер",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 14.sp,
-                                )
-                            }
-                        }
-                    }
+                    Divider(modifier = Modifier.padding(top = 9.dp), color = AppOutline)
                 }
+
+                HomeActionPanel(
+                    needsAssessment = trainingRoute.needsAssessment,
+                    focusSounds = trainingRoute.focusSounds.joinToString(" • ") { it.uppercase() },
+                    activityCount = trainingRoute.activities.size,
+                    onOpenTraining = onOpenTraining,
+                    onOpenAssessment = onOpenAssessment,
+                    onOpenFaceMap = onOpenFaceMap,
+                    onOpenSoundMap = onOpenSoundMap,
+                    onOpenWords = onOpenWords,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 0.dp),
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun HomeActionPanel(
+    needsAssessment: Boolean,
+    focusSounds: String,
+    activityCount: Int,
+    onOpenTraining: () -> Unit,
+    onOpenAssessment: () -> Unit,
+    onOpenFaceMap: () -> Unit,
+    onOpenSoundMap: () -> Unit,
+    onOpenWords: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = Color(0xFFF9F6ED),
+        shape = RoundedCornerShape(0.dp),
+        shadowElevation = 7.dp,
+    ) {
+        Column {
+            Box(modifier = Modifier.fillMaxWidth().height(3.dp).background(AppRed))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(88.dp)
+                    .clickable(onClick = onOpenTraining)
+                    .padding(horizontal = 18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(modifier = Modifier.width(3.dp).height(48.dp).background(AppRed))
+                Column(modifier = Modifier.padding(start = 13.dp).weight(1f)) {
+                        Text(
+                            "Бүгінгі шағын қадам",
+                            color = AppRed,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        if (needsAssessment) "Алдымен сөйлеуді бағалайық" else "Жаттығуды жалғастыру",
+                        modifier = Modifier.padding(top = 3.dp),
+                        color = AppText,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        if (needsAssessment) "Нәтижеден кейін жеке маршрут құрылады" else "$focusSounds  ·  $activityCount жаттығу",
+                        modifier = Modifier.padding(top = 2.dp),
+                        color = AppText.copy(alpha = 0.52f),
+                        fontSize = 10.sp,
+                    )
+                }
+                Text("Бастау", color = AppNavy, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+
+            Divider(color = AppOutline)
+            Row(
+                modifier = Modifier.fillMaxWidth().height(62.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                HomeQuickAction("✓", "Тексеру", AppRed, onOpenAssessment, Modifier.weight(1f))
+                HomeRailDivider()
+                HomeQuickAction("○", "Айна", AppText, onOpenFaceMap, Modifier.weight(1f))
+                HomeRailDivider()
+                HomeQuickAction("Ә", "Дыбыстар", AppText, onOpenSoundMap, Modifier.weight(1f))
+                HomeRailDivider()
+                HomeQuickAction("С", "Сөздер", AppText, onOpenWords, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeRailDivider() {
+    Box(modifier = Modifier.width(1.dp).height(30.dp).background(AppOutline))
+}
+
+@Composable
+private fun HomeQuickAction(
+    mark: String,
+    label: String,
+    color: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxHeight().clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(mark, color = color, fontSize = 13.sp, fontWeight = FontWeight.Black)
+        Text(
+            label,
+            modifier = Modifier.padding(top = 3.dp),
+            color = AppText.copy(alpha = 0.66f),
+            fontSize = 9.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
     }
 }
 
@@ -714,7 +748,7 @@ private fun LevelRouteMap(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState, reverseScrolling = true)
-            .padding(top = 100.dp, bottom = 370.dp),
+            .padding(top = 72.dp, bottom = 190.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         levels.reversed().forEachIndexed { index, level ->
@@ -782,11 +816,11 @@ private fun MapPathConnector(index: Int) {
         
         drawPath(
             path = path,
-            color = Color(0xFFD1D9E0).copy(alpha = 0.6f),
+            color = AppBlue.copy(alpha = 0.20f),
             style = Stroke(
-                width = 8.dp.toPx(), 
+                width = 5.dp.toPx(),
                 cap = StrokeCap.Round, 
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(20f, 25f))
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 20f))
             )
         )
     }
@@ -811,25 +845,21 @@ private fun LevelNode(
             modifier = Modifier.size(110.dp)
         ) {
             Surface(
-                modifier = Modifier.size(86.dp).padding(top = 6.dp),
+                modifier = Modifier.size(88.dp),
                 shape = CircleShape,
-                color = Color.Black.copy(alpha = 0.15f)
-            ) {}
-            
-            Surface(
-                modifier = Modifier.size(86.dp),
-                shape = CircleShape,
-                color = if (unlocked) Color.White else Color(0xFFE0E0E0),
-                border = BorderStroke(4.dp, if (unlocked) levelNodeColor(level.id) else Color.White),
-                shadowElevation = if (unlocked) 6.dp else 0.dp
+                color = if (unlocked) Color.White else Color(0xFFE7ECEE),
+                border = BorderStroke(2.dp, if (unlocked) levelNodeColor(level.id) else AppOutline),
+                shadowElevation = if (unlocked) 8.dp else 0.dp,
             ) {
-                if (unlocked) {
-                    NetworkImageBackground(url = level.imageUrl, alpha = 0.7f)
-                }
-                Box(contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.background(
+                        if (unlocked) levelNodeColor(level.id).copy(alpha = 0.09f) else Color.Transparent,
+                    ),
+                    contentAlignment = Alignment.Center,
+                ) {
                     Text(
                         text = if (unlocked) level.emoji else "🔒", 
-                        fontSize = 42.sp,
+                        fontSize = 38.sp,
                         modifier = Modifier.graphicsLayer {
                             if (!unlocked) alpha = 0.5f
                         }
@@ -851,9 +881,9 @@ private fun LevelNode(
 
             if (unlocked && stars > 0) {
                 Surface(
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 4.dp, bottom = 4.dp).size(32.dp),
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 3.dp, bottom = 3.dp).size(30.dp),
                     shape = CircleShape,
-                    color = AppGold,
+                    color = AppNavy,
                     border = BorderStroke(2.dp, Color.White),
                     shadowElevation = 4.dp
                 ) {
@@ -867,9 +897,10 @@ private fun LevelNode(
         Spacer(modifier = Modifier.height(8.dp))
         
         Surface(
-            color = if (unlocked) Color.White.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.5f),
-            shape = RoundedCornerShape(12.dp),
-            border = BorderStroke(1.dp, if (unlocked) levelNodeColor(level.id) else Color.Transparent)
+            color = if (unlocked) Color.White else AppSurfaceMuted,
+            shape = RoundedCornerShape(2.dp),
+            border = BorderStroke(1.dp, if (unlocked) AppOutline else Color.Transparent),
+            shadowElevation = if (unlocked) 2.dp else 0.dp,
         ) {
             Text(
                 text = level.title,
@@ -884,12 +915,12 @@ private fun LevelNode(
 }
 
 private fun levelNodeColor(levelId: Int): Color = when (levelId) {
-    1 -> Color(0xFF81D4FA)
-    2 -> Color(0xFFA5D6A7)
-    3 -> Color(0xFFFFE082)
-    4 -> Color(0xFFCE93D8)
-    5 -> Color(0xFFFFAB91)
-    else -> Color(0xFFB0BEC5)
+    1 -> AppBlue
+    2 -> AppGreen
+    3 -> AppOrange
+    4 -> AppPurple
+    5 -> Color(0xFFB96F68)
+    else -> Color(0xFF718089)
 }
 
 @Composable
@@ -904,9 +935,11 @@ private fun LevelHubScreen(
     onOpenActivity: (GameActivity) -> Unit,
 ) {
     @Suppress("UNUSED_VARIABLE") val observeRevision = progressRevision
-    Box(modifier = Modifier.fillMaxSize()) {
-        NetworkImageBackground(url = level.imageUrl, alpha = 0.2f)
-        
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(levelGradient(level.id))),
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -1390,6 +1423,7 @@ private fun ParentDashboardScreen(
     progress: ProgressRepository,
     progressRevision: Int,
     onBack: () -> Unit,
+    onReflection: () -> Unit,
     onStatistics: () -> Unit,
     onGuide: () -> Unit,
     onChildInfo: () -> Unit = {},
@@ -1405,6 +1439,10 @@ private fun ParentDashboardScreen(
         "Барлық қолданатын тілдеріңізде еркін сөйлесіңіз.",
     )
     val checked = remember { mutableStateListOf(false, false, false, false, false, false, false) }
+    val reflections = remember(progressRevision) { progress.parentReflections }
+    val reflectionInsight = remember(reflections) { ParentReflectionEngine.weeklyInsight(reflections) }
+    val todayKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+    val reflectedToday = reflections.any { it.dateKey == todayKey }
 
     Column(
         modifier = Modifier
@@ -1417,72 +1455,119 @@ private fun ParentDashboardScreen(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp, vertical = 10.dp),
+                .padding(horizontal = 20.dp, vertical = 18.dp),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ProgressRing(
-                    progress = progress.overallProgress,
-                    color = AppGreen,
-                    label = "Курс",
-                    modifier = Modifier.weight(1f),
-                )
-                ProgressRing(
-                    progress = progress.totalStars / 54f,
-                    color = AppOrange,
-                    label = "Жұлдыз",
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            Text(
+                "Балаңыздың бүгінгі жолы",
+                color = AppRed,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+            )
             Row(
-                modifier = Modifier.padding(top = 14.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.padding(top = 6.dp),
+                verticalAlignment = Alignment.Bottom,
             ) {
-                StatPill("🎮", "${progress.totalSessions}", "ойын сеансы", Modifier.weight(1f))
-                StatPill("🗣️", "${progress.practicedRounds}", "тапсырма", Modifier.weight(1f))
-                StatPill("📅", "${progress.activeDays}", "белсенді күн", Modifier.weight(1f))
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 14.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Button(
-                    onClick = onStatistics,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AppBlue),
-                ) {
-                    Text("📊 Нәтижелер")
-                }
-                Button(
-                    onClick = onGuide,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AppPurple),
-                ) {
-                    Text("📘 Нұсқаулық")
+                Text(
+                    "${(progress.overallProgress * 100).toInt()}",
+                    color = AppText,
+                    fontSize = 54.sp,
+                    lineHeight = 56.sp,
+                    fontWeight = FontWeight.Normal,
+                )
+                Text("%", modifier = Modifier.padding(start = 3.dp, bottom = 6.dp), color = AppRed, fontSize = 18.sp)
+                Column(modifier = Modifier.padding(start = 16.dp, bottom = 7.dp)) {
+                    Text("Оқу жолы аяқталды", color = AppText, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Text("Тек орындалған жаттығулар бойынша", color = AppText.copy(alpha = 0.48f), fontSize = 10.sp)
                 }
             }
+            LinearProgressIndicator(
+                progress = progress.overallProgress,
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(4.dp),
+                color = AppRed,
+                trackColor = AppOutline.copy(alpha = 0.55f),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ParentMetric("${progress.totalSessions}", "жаттығу", Modifier.weight(1f))
+                Box(modifier = Modifier.width(1.dp).height(34.dp).background(AppOutline))
+                ParentMetric("${progress.practicedRounds}", "тапсырма", Modifier.weight(1f))
+                Box(modifier = Modifier.width(1.dp).height(34.dp).background(AppOutline))
+                ParentMetric("${progress.activeDays}", "белсенді күн", Modifier.weight(1f))
+            }
 
-            Button(
-                onClick = onChildInfo,
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 10.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AppOrange),
+                    .padding(top = 22.dp)
+                    .clickable(onClick = onReflection),
+                color = Color.Transparent,
+                shape = RoundedCornerShape(0.dp),
+                border = BorderStroke(1.dp, if (reflectedToday) AppGreen else AppRed),
             ) {
-                Text("🧒 Бала туралы ақпарат")
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 15.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("✎", color = if (reflectedToday) AppGreen else AppRed, fontSize = 24.sp, fontWeight = FontWeight.Normal)
+                    Column(modifier = Modifier.padding(start = 15.dp).weight(1f)) {
+                        Text("Күндік рефлексия", color = AppText, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                        Text(
+                            if (reflectedToday) "Бүгінгі бақылау сақталды — өзгертуге болады" else "1 минут: байқау, нәтиже, келесі қадам",
+                            modifier = Modifier.padding(top = 3.dp),
+                            color = AppText.copy(alpha = 0.53f),
+                            fontSize = 10.sp,
+                        )
+                    }
+                    Text(
+                        if (reflectedToday) "Дайын" else "Жазу",
+                        color = if (reflectedToday) AppGreen else AppRed,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+
+            Surface(
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                color = AppNavy,
+                shape = RoundedCornerShape(2.dp),
+            ) {
+                Row(modifier = Modifier.fillMaxWidth().height(66.dp), verticalAlignment = Alignment.CenterVertically) {
+                    ParentAction("Нәтижелер", onStatistics, Modifier.weight(1f))
+                    Box(modifier = Modifier.width(1.dp).height(32.dp).background(Color.White.copy(alpha = 0.18f)))
+                    ParentAction("Кеңестер", onGuide, Modifier.weight(1f))
+                    Box(modifier = Modifier.width(1.dp).height(32.dp).background(Color.White.copy(alpha = 0.18f)))
+                    ParentAction("Бала туралы", onChildInfo, Modifier.weight(1f))
+                }
             }
 
             Text(
+                "Аптаның шағын қорытындысы  ·  ${reflectionInsight.completedDays}/7 күн",
+                modifier = Modifier.padding(top = 25.dp),
+                color = AppRed,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                reflectionInsight.title,
+                modifier = Modifier.padding(top = 6.dp),
+                color = AppText,
+                style = MaterialTheme.typography.titleLarge,
+            )
+            Text(
+                reflectionInsight.detail,
+                modifier = Modifier.padding(top = 7.dp),
+                color = AppText.copy(alpha = 0.62f),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+
+            Text(
                 text = "Күнделікті тілдік қолдау",
-                modifier = Modifier.padding(top = 24.dp, bottom = 10.dp),
-                color = AppPurple,
-                fontSize = 19.sp,
-                fontWeight = FontWeight.ExtraBold,
+                modifier = Modifier.padding(top = 28.dp, bottom = 10.dp),
+                color = AppText,
+                style = MaterialTheme.typography.titleLarge,
             )
             tips.forEachIndexed { index, tip ->
                 Row(
@@ -1527,6 +1612,36 @@ private fun ParentDashboardScreen(
 }
 
 @Composable
+private fun ParentMetric(value: String, label: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, color = AppText, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            label,
+            modifier = Modifier.padding(top = 2.dp),
+            color = AppText.copy(alpha = 0.44f),
+            fontSize = 8.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp,
+        )
+    }
+}
+
+@Composable
+private fun ParentAction(
+    title: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxHeight().clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(title, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
 private fun StatisticsScreen(
     progress: ProgressRepository,
     progressRevision: Int,
@@ -1553,8 +1668,8 @@ private fun StatisticsScreen(
                         .fillMaxWidth()
                         .padding(vertical = 7.dp),
                     color = Color.White,
-                    shape = RoundedCornerShape(20.dp),
-                    border = BorderStroke(1.dp, Color(0xFFE5EBF0)),
+                    shape = RoundedCornerShape(2.dp),
+                    border = BorderStroke(1.dp, AppOutline),
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1622,8 +1737,8 @@ private fun StatisticsScreen(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = Color.White,
-                    shape = RoundedCornerShape(20.dp),
-                    border = BorderStroke(1.dp, Color(0xFFE5EBF0))
+                    shape = RoundedCornerShape(2.dp),
+                    border = BorderStroke(1.dp, AppOutline)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         difficultWords.forEach { (word, count) ->
@@ -1858,59 +1973,54 @@ private fun InfoStrip(emoji: String, text: String, color: Color) {
 }
 
 @Composable
-private fun AppTopBar(
+internal fun AppTopBar(
     title: String,
     onBack: (() -> Unit)? = null,
     trailing: String? = null,
     onTrailing: () -> Unit = {},
 ) {
-    Box(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(64.dp)
-            .background(Brush.horizontalGradient(listOf(AppBlue, AppTurquoise.copy(alpha = 0.8f))))
+            .height(64.dp),
+        color = AppBackground,
     ) {
-        KazakhPatternBackground(
-            modifier = Modifier.fillMaxSize(),
-            color = Color.White.copy(alpha = 0.15f),
-            strokeWidth = 1f
-        )
-        
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (onBack != null) {
-                BackButton(onClick = onBack)
-            } else {
-                Spacer(modifier = Modifier.size(42.dp))
-            }
-            Text(
-                text = title,
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(horizontal = 8.dp),
-                color = Color.White,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.ExtraBold,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-            )
-            if (trailing != null) {
-                Surface(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clickable(onClick = onTrailing),
-                    color = Color.White.copy(alpha = 0.2f),
-                    shape = CircleShape,
-                ) {
-                    Box(contentAlignment = Alignment.Center) { Text(trailing, fontSize = 21.sp) }
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (onBack != null) {
+                    BackButton(onClick = onBack)
+                } else {
+                    Box(modifier = Modifier.width(3.dp).height(30.dp).background(AppRed))
                 }
-            } else {
-                Spacer(modifier = Modifier.size(42.dp))
+                Text(
+                    text = title,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 13.dp, end = 10.dp),
+                    color = AppText,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                )
+                if (trailing != null) {
+                    Text(
+                        trailing,
+                        modifier = Modifier.clickable(onClick = onTrailing).padding(9.dp),
+                        color = AppRed,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 0.7.sp,
+                    )
+                } else {
+                    Spacer(modifier = Modifier.width(36.dp))
+                }
             }
+            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(AppOutline))
         }
     }
 }
@@ -1920,31 +2030,26 @@ internal fun BackButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier
-            .size(42.dp)
-            .clickable(onClick = onClick),
-        shape = CircleShape,
-        color = Color(0xFFF0F4F7),
+    Box(
+        modifier = modifier.size(36.dp).clickable(onClick = onClick),
+        contentAlignment = Alignment.CenterStart,
     ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                text = "‹",
-                color = AppText.copy(alpha = 0.68f),
-                fontSize = 35.sp,
-                fontWeight = FontWeight.Light,
-            )
-        }
+        Text(
+            text = "←",
+            color = AppText,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Normal,
+        )
     }
 }
 
 private fun levelGradient(levelId: Int): List<Color> = when (levelId) {
-    1 -> listOf(Color(0xFFFFE2A8), Color(0xFFFFF3D8))
-    2 -> listOf(Color(0xFFDDF8D6), Color(0xFFF0FFE9))
-    3 -> listOf(Color(0xFFD8F1FF), Color(0xFFEEF9FF))
-    4 -> listOf(Color(0xFFE7D8FF), Color(0xFFF6F0FF))
-    5 -> listOf(Color(0xFFFFD8E8), Color(0xFFFFF0F6))
-    else -> listOf(Color(0xFFFFE9A8), Color(0xFFFFF9DA))
+    1 -> listOf(Color(0xFFFCE8BF), Color(0xFFFFF8E9))
+    2 -> listOf(Color(0xFFDDEFE9), Color(0xFFF3FAF7))
+    3 -> listOf(Color(0xFFDCECF1), Color(0xFFF2F8FA))
+    4 -> listOf(Color(0xFFE5E8F3), Color(0xFFF5F6FA))
+    5 -> listOf(Color(0xFFF3E4E1), Color(0xFFFBF5F3))
+    else -> listOf(Color(0xFFE8ECEF), Color(0xFFF8FAFA))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

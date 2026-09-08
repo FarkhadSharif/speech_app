@@ -71,6 +71,8 @@ import com.farkhad.speechapp.ui.theme.AppBlue
 import com.farkhad.speechapp.ui.theme.AppGreen
 import com.farkhad.speechapp.ui.theme.AppOrange
 import com.farkhad.speechapp.ui.theme.AppPurple
+import com.farkhad.speechapp.ui.theme.AppNavy
+import com.farkhad.speechapp.ui.theme.AppRed
 import com.farkhad.speechapp.ui.theme.AppText
 import com.google.mlkit.vision.face.FaceContour
 import kotlinx.coroutines.delay
@@ -116,50 +118,37 @@ private fun FaceMapPermissionScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFF0A1833), Color(0xFF17305C), AppPurple),
-                ),
-            )
+            .background(AppBackground)
             .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.Center,
     ) {
-        Surface(
-            modifier = Modifier.size(112.dp),
-            shape = CircleShape,
-            color = Color.White.copy(alpha = 0.12f),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text("✨", fontSize = 56.sp)
-            }
-        }
-        Spacer(modifier = Modifier.height(24.dp))
+        Text("FM / 02", color = AppRed, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
         Text(
-            text = "Face Map\nАртикуляциялық айна",
-            color = Color.White,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.ExtraBold,
-            textAlign = TextAlign.Center,
+            text = "Артикуляциялық\nайна",
+            modifier = Modifier.padding(top = 10.dp),
+            color = AppText,
+            fontSize = 34.sp,
+            lineHeight = 40.sp,
+            fontWeight = FontWeight.Bold,
         )
         Spacer(modifier = Modifier.height(14.dp))
         Text(
             text = "Камера ерін мен жақ қозғалысын экранда көрсетеді. Кадрлар сақталмайды және интернетке жіберілмейді.\n\nКамера показывает движения губ и челюсти. Кадры не сохраняются и не отправляются в интернет.",
-            color = Color.White.copy(alpha = 0.82f),
-            textAlign = TextAlign.Center,
+            color = AppText.copy(alpha = 0.68f),
             lineHeight = 21.sp,
         )
         Spacer(modifier = Modifier.height(28.dp))
         Button(
             onClick = onRequestPermission,
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = AppOrange),
-            shape = RoundedCornerShape(18.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = AppNavy),
+            shape = RoundedCornerShape(4.dp),
         ) {
             Text("Камераны қосу / Включить камеру", fontWeight = FontWeight.Bold)
         }
         TextButton(onClick = onBack) {
-            Text("Кейін / Позже", color = Color.White)
+            Text("Кейін / Позже", color = AppText.copy(alpha = 0.64f))
         }
     }
 }

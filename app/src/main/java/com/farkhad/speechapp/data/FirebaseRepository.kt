@@ -197,6 +197,57 @@ class FirebaseRepository : AuthRepository {
         }
     }
 
+    suspend fun saveParentReflection(reflection: ParentReflection): Result<Boolean> {
+        return try {
+            val uid = auth.currentUser?.uid ?: throw Exception("No user logged in")
+            val data = mapOf(
+                "createdAt" to reflection.createdAt,
+                "engagement" to reflection.engagement,
+                "clarity" to reflection.clarity,
+                "independence" to reflection.independence,
+                "practiceMinutes" to reflection.practiceMinutes,
+                "context" to reflection.context,
+                "wins" to reflection.wins.toList(),
+                "note" to reflection.note,
+                "nextStep" to reflection.nextStep,
+            )
+            db.collection("users").document(uid)
+                .collection("reflections").document(reflection.dateKey)
+                .set(data, SetOptions.merge()).await()
+            Result.success(true)
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    suspend fun getParentReflections(): Result<List<ParentReflection>> {
+        return try {
+            val uid = auth.currentUser?.uid ?: throw Exception("No user logged in")
+            val snapshot = db.collection("users").document(uid)
+                .collection("reflections")
+                .get().await()
+            val entries = snapshot.documents.mapNotNull { document ->
+                val createdAt = document.getLong("createdAt") ?: return@mapNotNull null
+                ParentReflection(
+                    id = createdAt,
+                    dateKey = document.id,
+                    createdAt = createdAt,
+                    engagement = (document.getLong("engagement") ?: 3L).toInt().coerceIn(1, 5),
+                    clarity = (document.getLong("clarity") ?: 3L).toInt().coerceIn(1, 5),
+                    independence = (document.getLong("independence") ?: 3L).toInt().coerceIn(1, 5),
+                    practiceMinutes = (document.getLong("practiceMinutes") ?: 0L).toInt().coerceAtLeast(0),
+                    context = document.getString("context").orEmpty(),
+                    wins = (document.get("wins") as? List<*>)?.filterIsInstance<String>()?.toSet().orEmpty(),
+                    note = document.getString("note").orEmpty(),
+                    nextStep = document.getString("nextStep").orEmpty(),
+                )
+            }.sortedByDescending { it.createdAt }
+            Result.success(entries)
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
     private suspend fun <T> authResult(
         defaultReason: AuthFailureReason = AuthFailureReason.Unknown,
         action: suspend () -> T,
